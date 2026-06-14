@@ -1,0 +1,20 @@
+# Geo
+geopandas>=1.0
+shapely>=2.0
+pyproj>=3.6
+fiona>=1.9
+
+# DB
+SQLAlchemy>=2.0
+GeoAlchemy2>=0.15
+psycopg2-binary>=2.9
+
+# Scraping
+playwright>=1.45
+requests>=2.32
+beautifulsoup4>=4.12
+
+# Util
+python-dotenv>=1.0
+pandas>=2.2
+tenacity>=8.5

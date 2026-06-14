@@ -1,0 +1,20 @@
+# Dados brutos e processados (não versionar — podem ser grandes / conter dado pessoal)
+data/raw/
+data/processed/
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.gpkg
+*.geojson
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Segredos
+*.key
+secrets/

@@ -1,0 +1,22 @@
+sigla,nome,to_max_pct,tap_min_pct,recuo_frontal_m,recuo_lateral,recuo_fundo,ia_max,gabarito_obs,usos_obs,notas
+ZH-1,Zona Habitacional 1,50,10,5.00,"1,50 ate 3o PV; 3,00 do 4o PV; DE=3,00+[(N-4)x0,30]","1,50 ate 3o PV; 3,00 do 4o PV; DE=3,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(F); recuos CONFERIR
+ZH-2,Zona Habitacional 2,55,5,5.00,"3,00 do 4o PV; DE=3,00+[(N-4)x0,30]","3,00 (3o-4o PV); DE=3,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(G)(H); recuos CONFERIR
+ZH-3,Zona Habitacional 3,50,5,5.00,"~2,00 ate 3o PV; 3,00 do 4o PV; DE=3,00+[(N-4)x0,30]","~2,00 ate 3o PV; 3,00 do 4o PV; DE=3,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(F); recuos CONFERIR
+ZH-4,Zona Habitacional 4,50,15,5.00,"4,00 do 4o PV; DE=4,00+[(N-4)x0,30]","4,00 do 4o PV; DE=4,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(F)(H); recuos CONFERIR
+ZH-5,Zona Habitacional 5,50,15,5.00,"3,00 (3o-4o PV); DE=3,00+[(N-4)x0,30]","3,00 (3o-4o PV); DE=3,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(F)(H); recuos CONFERIR
+ZCS-1,Zona Comercio e Servico 1,80,5,0.00,"0,00","2,00 (0,00 ate 2o PV)",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(H)
+ZCS-2,Zona Comercio e Servico 2,70,5,5.00,"0,00 ate 2o PV; 2,00 (3o-4o PV); DE=3,00+[(N-4)x0,30]","0,00 ate 2o PV; 2,00 (3o-4o PV); DE=3,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(H); recuos CONFERIR
+ZCS-3,Zona Comercio e Servico 3,65,5,5.00,"3,00 do 4o PV; DE=3,00+[(N-4)x0,30]","3,00 do 4o PV; DE=3,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(F)(H); recuos CONFERIR
+ZCS-4,Zona Comercio e Servico 4,65,5,5.00,"2,00 (3o-4o PV); DE=3,00+[(N-4)x0,30]","2,00 (3o-4o PV); DE=3,00+[(N-4)x0,30]",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(H); recuos CONFERIR
+ZCS-5,Zona Comercio e Servico 5,50,25,10.00,"5,00","5,00",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(F)
+ZCS-6,Zona Comercio e Servico 6,30,30,10.00,"8,00","8,00",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),(F)
+ZCS-7,Zona Comercio e Servico 7,65,10,8.00,"4,00","4,00",,altura espacial: faixa 500m orla + IPHAEP,usos por hierarquia viaria (Anexo IV),
+ZEPA-1,Zona Especial de Protecao Ambiental 1,,,,,,,conforme plano de manejo,licenciamento ambiental,uso conforme plano de manejo especifico
+ZEPA-2,Zona Especial de Protecao Ambiental 2,40,40,10.00,"3,00 do 4o PV; DE=3,00+[(N-4)x0,30]","3,00 do 4o PV; DE=3,00+[(N-4)x0,30]",,altura espacial + licenciamento ambiental,licenciamento ambiental,(F)(H)(I); recuos CONFERIR
+ZEPA-3,Zona Especial de Protecao Ambiental 3,40,40,10.00,"3,00 ate 4o PV; DE=3,00+[(N-4)x0,30]","3,00 ate 4o PV; DE=3,00+[(N-4)x0,30]",,altura espacial + licenciamento ambiental,licenciamento ambiental,(I); recuos CONFERIR
+ZI-1,Zona Industrial 1,50,10,6.00,"3,00","3,00",,altura espacial: faixa 500m orla + IPHAEP,IND1/IND2/IND3 (Anexo IV),
+ZI-2,Zona Industrial 2,50,10,6.00,"3,00","3,00",,altura espacial: faixa 500m orla + IPHAEP,IND1/IND2 (Anexo IV),
+ZBD,Zona de Baixa Densidade,10,80,10.00,"10,00","10,00",,maximo 2 pavimentos,baixa densidade,(J) max 2 PV
+ZDTRL,Zona de Deposicao e Tratamento de Residuos Liquidos,,,,,,,,residuos liquidos,uso especifico (residuos liquidos)
+ZDTRS,Zona de Deposicao e Tratamento de Residuos Solidos,,,,,,,,residuos solidos,uso especifico (residuos solidos)
+SEAV,Setor Especial de Areas Verdes,,15,5.00,"3,00 do 4o PV; DE=3,00+[(N-4)x0,30]","3,00 do 4o PV; DE=3,00+[(N-4)x0,30]",2.00,"IA 1,40-2,00 conforme % de area preservada (Anexo VII)",setor de areas verdes,TO maxima CONFERIR (linha ilegivel no Anexo V); IA graduado

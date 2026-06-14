@@ -1,0 +1,22 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: terraiq-postgis
+    environment:
+      POSTGRES_USER: terraiq
+      POSTGRES_PASSWORD: terraiq
+      POSTGRES_DB: terraiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - terraiq_pg:/var/lib/postgresql/data
+      # aplica o schema automaticamente na primeira subida (volume vazio)
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/99-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terraiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  terraiq_pg:
