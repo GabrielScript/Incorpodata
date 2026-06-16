@@ -71,6 +71,24 @@ CREATE TABLE IF NOT EXISTS geo.lote_zona (
 );
 CREATE INDEX IF NOT EXISTS idx_lote_zona_sigla ON geo.lote_zona (sigla);
 
+-- ───────────────────────── Restrições de altura (espacial: orla + patrimônio) ─────────────────────────
+-- Em JP a altura/nº de pavimentos é controlada por restrições ESPACIAIS, não pela zona.
+CREATE TABLE IF NOT EXISTS geo.restricao_altura (
+  id     bigserial PRIMARY KEY,
+  tipo   text,   -- faixa_orla | centro_historico | barreira_cabo_branco
+  rotulo text,   -- ex.: faixa '1ª'..'9ª'
+  geom   geometry(MultiPolygon, 31985)
+);
+CREATE INDEX IF NOT EXISTS idx_restricao_geom ON geo.restricao_altura USING GIST (geom);
+
+CREATE TABLE IF NOT EXISTS geo.lote_restricao (
+  lote_id             bigint PRIMARY KEY REFERENCES geo.lotes(id) ON DELETE CASCADE,
+  faixa_orla          text,                 -- faixa de escalonamento da orla (1ª..9ª) ou NULL
+  em_centro_historico boolean DEFAULT false,
+  em_barreira         boolean DEFAULT false,
+  altura_livre        boolean               -- sem restrição espacial → vertical limitada só por recuos
+);
+
 -- ───────────────────────── Anúncios (efêmero, gatilho de demanda) ─────────────────────────
 -- LGPD: NÃO estocar telefone do vendedor para revenda. Guardamos a URL (ponteiro) e
 -- revelamos contato sob demanda ao usuário pagante.

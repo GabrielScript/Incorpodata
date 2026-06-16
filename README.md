@@ -39,14 +39,41 @@ Casar `anúncio → lote` por geolocalização = "este lote está à venda por R
   Guardar link do anúncio; **revelar contato sob demanda** (deeplink) ao usuário pagante. Minimização.
 
 ## Stack
-- Python 3.12 — `geopandas` (ingest geo), `Playwright` (scraping leve), `Firecrawl` (sites blindados).
-- PostgreSQL + **PostGIS** (Docker) — join espacial é o coração.
+- **Dados/ingest:** Python 3.12 — `geopandas` (ingest geo), `Playwright` (scraping leve), `Firecrawl` (sites blindados).
+- **DB:** PostgreSQL + **PostGIS** (Docker) — join espacial é o coração. SRID interno 31985; a API reprojeta p/ 4326 (mapa).
+- **API:** **FastAPI** (Python) — serve dados do lote + regra de viabilidade. JWT (`python-jose`), bcrypt (`passlib`).
+- **Frontend:** **Vite + React + TypeScript + MapLibre GL JS** (`frontend/`). App logado, sem SEO → Next descartado.
+- **Migrations:** **Alembic** para o schema `app` (stateful: users, landbank).
+
+## Aplicação (app)
+Spec completa: `docs/superpowers/specs/2026-06-15-terraiq-app-design.md`. Responde, por lote: **(1) o que cabe construir** (envelope LUOS), depois **(2) melhor uso** e **(3) valor residual** (fases 2-3).
+
+### API (`src/api/`)
+- `GET /api/health` — healthcheck.
+- `GET /api/bairros` — lista de bairros.
+- `GET /api/lots` — lotes como **GeoJSON FeatureCollection** para o mapa. Filtros: `bairro`, `only_vacant` (só TERRITORIAL/vagos), `a_venda` (com anúncio casado), `area_min`/`area_max`, `sort`, `limit`.
+- `GET /api/lots/{id}` — **ficha do lote**: cadastro + viabilidade (TO/TAP, projeção térreo, permeável, recuos, usos) + restrição de altura (rótulo orla/IPHAEP/barreira) + anúncio casado (se houver).
+- **Auth** (`/api/auth`): `register` · `login` (JWT) · `me`. bcrypt + rate-limit por IP + erro genérico (não revela se e-mail existe). _Registro ainda aberto — fechar (convite/admin) antes de produção._
+- **Landbank** (`/api/landbank`): CRUD do pipeline de lotes salvos, **escopado por usuário**. Estágios: `triagem → analise → opcao → due_diligence → adquirido/descartado`.
+- Viabilidade pura e testada em `src/api/viability.py` (a altura em JP é **espacial**, não vem da zona) — `tests/test_viability.py`.
+
+### Frontend (`frontend/src/`)
+- **Explorar** — mapa de lotes (MapLibre) + barra de filtros + lista de resultados.
+- **Ficha do lote** — painel com cadastro, viabilidade, restrição de altura e anúncio.
+- _Pendente:_ tela **Landbank** e **UI de login** (backend pronto, frontend ainda não consome).
+
+### Schema `app` (Alembic — `migrations/`)
+- `app.users` (auth B2B) · `app.landbank_items` (lote salvo + estágio + notas, enum `app.estagio_lote`).
+- _Pendente da spec:_ `app.saved_searches`, `app.error_reports` (feature "⚑ reportar erro").
 
 ## Ordem de construção
-1. [ ] Espinha geo: baixar Filipeia (lotes, quadras, zoneamento, bairros) → PostGIS.
-2. [ ] Camada LUOS: tabelar parâmetros da LC 166/2024 por zona → área construível por lote.
-3. [ ] Scrapers: ChavesNaMão → normalizar → geocodificar → casar no lote.
-4. [ ] Primeira entrega para 1 construtora.
+1. [x] Espinha geo: Filipeia (lotes, quadras, zoneamento, bairros) → PostGIS.
+2. [x] Camada LUOS: parâmetros da LC 166/2024 por zona → área construível por lote.
+3. [x] API read-only (lotes/ficha) + frontend (mapa Bancários + ficha + filtros).
+4. [x] Schema `app` + auth (JWT) + landbank (backend).
+5. [ ] Frontend: tela Landbank + login; "⚑ reportar erro"; saved searches.
+6. [ ] Scrapers: ChavesNaMão → normalizar → geocodificar → casar no lote.
+7. [ ] PDF da ficha; Jobs 2-3 (melhor uso, valor residual). Primeira entrega p/ 1 construtora.
 
 ## Como rodar
 ```bash

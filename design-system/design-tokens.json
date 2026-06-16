@@ -1,0 +1,52 @@
+{
+  "$meta": {
+    "project": "TerraIQ",
+    "description": "Tokens do frontend (React + MapLibre). Espelham :root em frontend/src/index.css.",
+    "updated": "2026-06-16",
+    "mode": "light-only (decisão de produto — ferramenta técnica diurna)"
+  },
+  "color": {
+    "bg": { "value": "#f5f6f7", "use": "fundo da aplicação" },
+    "surface": { "value": "#ffffff", "use": "cartões, painel, topbar" },
+    "surface-2": { "value": "#fbfcfc", "use": "superfície sutil (cards internos, hover)" },
+    "border": { "value": "#e4e7e9", "use": "divisores, bordas padrão" },
+    "border-strong": { "value": "#d2d7da", "use": "bordas de controles (select/input)" },
+    "ink": { "value": "#181c1f", "use": "texto principal", "contrastOnSurface": "15.9:1 (AAA)" },
+    "muted": { "value": "#6a747b", "use": "texto secundário", "contrastOnSurface": "4.96:1 (AA)" },
+    "muted-2": { "value": "#6c767c", "use": "texto terciário", "contrastOnSurface": "4.65:1 (AA)" },
+    "accent": { "value": "#0f766e", "use": "marca, CTA primário, à venda" },
+    "accent-ink": { "value": "#0b524c", "use": "texto/links em accent sobre claro", "contrastOnSurface": "7.9:1 (AAA)" },
+    "accent-soft": { "value": "#e7f1ef", "use": "fundo de destaque (linha ativa, faixa altura)" },
+    "venda": { "value": "#0f766e", "use": "lote à venda (mapa + tag)" },
+    "danger": { "value": "#b91c1c", "use": "estados de erro" }
+  },
+  "radius": {
+    "sm": "6px",
+    "md": "8px"
+  },
+  "typography": {
+    "family": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    "baseSize": "14px",
+    "lineHeight": "1.45",
+    "scale": ["11.5px", "12px", "12.5px", "13px", "13.5px", "14px", "16px", "20px"],
+    "weights": { "regular": 400, "medium": 600, "bold": 700 },
+    "numeric": "tabular-nums em todos os dados (áreas, preços, métricas)"
+  },
+  "spacing": {
+    "rhythm": "base 8px (4/8/12/16/24); 6/10/14/18 usados em controles densos",
+    "scale": ["4px", "6px", "8px", "10px", "12px", "14px", "16px", "18px", "24px"]
+  },
+  "layout": {
+    "panelWidth": "380px",
+    "breakpointMobile": "720px",
+    "mobileMapHeight": "45dvh"
+  },
+  "motion": {
+    "microInteraction": "130ms ease (hover de linha/botão)",
+    "mapFit": "600ms (0ms se prefers-reduced-motion)",
+    "reducedMotion": "respeitado via @media (prefers-reduced-motion: reduce)"
+  },
+  "elevation": {
+    "legend": "0 1px 3px rgba(0,0,0,0.08)"
+  }
+}

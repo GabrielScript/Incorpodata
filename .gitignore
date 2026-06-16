@@ -14,6 +14,14 @@ data/processed/
 __pycache__/
 *.pyc
 .env
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Ferramentas locais do Claude (skills/bundles — não fazem parte do app)
+.claude/Skills/
+.claude/*.zip
 
 # Segredos
 *.key

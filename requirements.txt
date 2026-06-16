@@ -18,3 +18,18 @@ beautifulsoup4>=4.12
 python-dotenv>=1.0
 pandas>=2.2
 tenacity>=8.5
+
+# API (backend FastAPI)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
+
+# Auth + migrations
+alembic>=1.13
+passlib[bcrypt]>=1.7
+python-jose[cryptography]>=3.3
+python-multipart>=0.0.9
+email-validator>=2.2
+
+# Test
+pytest>=8.0

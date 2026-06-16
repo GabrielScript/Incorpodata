@@ -2,18 +2,24 @@ services:
   postgis:
     image: postgis/postgis:16-3.4
     container_name: terraiq-postgis
+    restart: unless-stopped
+    # Credenciais vêm do .env (com defaults de dev). Postgres só aplica POSTGRES_*
+    # na 1ª subida (volume vazio); trocar depois exige recriar o volume.
     environment:
-      POSTGRES_USER: terraiq
-      POSTGRES_PASSWORD: terraiq
-      POSTGRES_DB: terraiq
+      POSTGRES_USER: ${POSTGRES_USER:-terraiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terraiq}
+      POSTGRES_DB: ${POSTGRES_DB:-terraiq}
     ports:
-      - "5432:5432"
+      # Só localhost: não expõe o Postgres na rede/LAN (docker-patterns).
+      - "127.0.0.1:5432:5432"
     volumes:
       - terraiq_pg:/var/lib/postgresql/data
       # aplica o schema automaticamente na primeira subida (volume vazio)
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/99-schema.sql:ro
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U terraiq"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-terraiq}"]
       interval: 5s
       timeout: 5s
       retries: 10
