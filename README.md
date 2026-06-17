@@ -77,10 +77,25 @@ Spec completa: `docs/superpowers/specs/2026-06-15-terraiq-app-design.md`. Respon
 
 ## Como rodar
 ```bash
-cp .env.example .env          # ajustar credenciais se quiser
-docker compose up -d          # sobe PostGIS em localhost:5432
+# 1) Banco PostGIS (schema aplicado automaticamente na 1ª subida)
+cp .env.example .env                       # credenciais de dev já funcionam
+docker compose up -d                       # 127.0.0.1:5432
+
+# 2) Python + carga da base geo/zoneamento (precisa de data/raw + config/luos_parametros.csv)
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
-playwright install chromium
-psql "$DATABASE_URL" -f sql/schema.sql   # ou rodar via src/db
+python -m src.pipeline.load_all            # data/raw + LUOS -> geo.* (idempotente)
+
+# 3) API
+uvicorn src.api.main:app --reload          # http://localhost:8000/docs
+
+# 4) Frontend (outro terminal)
+cd frontend && npm install && npm run dev  # http://localhost:5173
+```
+
+**Demo — camada "à venda":** popula uma amostra de anúncios de *exemplo* (não são comps
+reais) casados a lotes de Bancários, para o app mostrar preço + "cabe Y" no térreo:
+```bash
+docker exec -i terraiq-postgis psql -U terraiq < sql/seed_demo_anuncios.sql
+# remover:  docker exec terraiq-postgis psql -U terraiq -c "DELETE FROM market.anuncios WHERE fonte='exemplo';"
 ```
