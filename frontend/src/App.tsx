@@ -3,12 +3,16 @@ import { FiltersBar } from './components/FiltersBar'
 import { MapView } from './components/MapView'
 import { ResultsList } from './components/ResultsList'
 import { LotFichaPanel } from './components/LotFichaPanel'
+import { LandbankBoard } from './components/LandbankBoard'
 import { useAsync } from './hooks/useApi'
 import { getLot, listBairros, listLots, type LotFilters } from './api/client'
 
+type View = 'explorar' | 'landbank'
+
 export default function App() {
+  const [view, setView] = useState<View>('explorar')
   const [filters, setFilters] = useState<LotFilters>({
-    bairro: 'Bancários',
+    bairro: '',
     onlyVacant: true,
     aVenda: false,
     areaMin: '',
@@ -33,33 +37,54 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <h1 className="brand">
-          Terra<span>IQ</span>
+          Incorpo<span>Data</span>
         </h1>
-        <FiltersBar bairros={bairros.data ?? []} value={filters} onChange={setFilters} />
+        <nav className="viewnav">
+          <button className={view === 'explorar' ? 'on' : ''} onClick={() => setView('explorar')}>
+            Explorar
+          </button>
+          <button className={view === 'landbank' ? 'on' : ''} onClick={() => setView('landbank')}>
+            Landbank
+          </button>
+        </nav>
+        {view === 'explorar' && (
+          <FiltersBar bairros={bairros.data ?? []} value={filters} onChange={setFilters} />
+        )}
       </header>
-      <main className="main">
-        <MapView data={lots.data} selectedId={selectedId} onSelect={setSelectedId} />
-        <aside className="panel">
-          {selectedId != null ? (
-            <LotFichaPanel
-              lot={ficha.data}
-              loading={ficha.loading}
-              error={ficha.error}
-              onBack={() => setSelectedId(null)}
-            />
-          ) : (
-            <ResultsList
-              data={lots.data}
-              loading={lots.loading}
-              error={lots.error}
-              count={count}
-              sort={filters.sort}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          )}
-        </aside>
-      </main>
+      {view === 'explorar' ? (
+        <main className="main">
+          <MapView data={lots.data} selectedId={selectedId} onSelect={setSelectedId} />
+          <aside className="panel">
+            {selectedId != null ? (
+              <LotFichaPanel
+                lot={ficha.data}
+                loading={ficha.loading}
+                error={ficha.error}
+                onBack={() => setSelectedId(null)}
+              />
+            ) : (
+              <ResultsList
+                data={lots.data}
+                loading={lots.loading}
+                error={lots.error}
+                count={count}
+                sort={filters.sort}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            )}
+          </aside>
+        </main>
+      ) : (
+        <main className="main">
+          <LandbankBoard
+            onOpenLot={(id) => {
+              setSelectedId(id)
+              setView('explorar')
+            }}
+          />
+        </main>
+      )}
     </div>
   )
 }

@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from src.api.db import get_conn
-from src.api.schemas import Listing, LotFicha, Restricao, Viability
-from src.api.viability import altura_label
+from src.api.pdf import build_ficha_pdf
+from src.api.schemas import VGV, Listing, LotFicha, Restricao, Viability
+from src.api.viability import altura_label, estimar_vgv
 
 router = APIRouter(prefix="/api", tags=["lots"])
 
@@ -46,7 +47,7 @@ def list_bairros(conn: Connection = Depends(get_conn)) -> list[str]:
 
 @router.get("/lots")
 def list_lots(
-    bairro: str = Query("Bancários", description="filtro de bairro (ILIKE); '' = todos"),
+    bairro: str = Query("", description="filtro de bairro (ILIKE); '' = todos"),
     only_vacant: bool = Query(True, description="só lotes TERRITORIAL (vagos) — alvo do negócio"),
     a_venda: bool = Query(False, description="só lotes com anúncio casado"),
     area_min: float | None = Query(None, ge=0, description="área mínima do lote (m²)"),
@@ -117,8 +118,8 @@ def list_lots(
     return {"type": "FeatureCollection", "features": features}
 
 
-@router.get("/lots/{lot_id}", response_model=LotFicha)
-def get_lot(lot_id: int, conn: Connection = Depends(get_conn)) -> LotFicha:
+def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
+    """Ficha completa do lote (cadastro + viabilidade + restrição + anúncio + VGV). None se não existe."""
     sql = """
         SELECT l.id, l.inscricao, l.setor, l.quadra, l.lote, l.logradouro,
                l.bairro, l.tipo, l.area_cad_m2, l.area_geom_m2,
@@ -138,7 +139,7 @@ def get_lot(lot_id: int, conn: Connection = Depends(get_conn)) -> LotFicha:
     """
     row = conn.execute(text(sql), {"id": lot_id}).mappings().first()
     if row is None:
-        raise HTTPException(status_code=404, detail="lote não encontrado")
+        return None
 
     lrow = conn.execute(
         text(
@@ -189,6 +190,44 @@ def get_lot(lot_id: int, conn: Connection = Depends(get_conn)) -> LotFicha:
             preco_m2=_f(lrow["preco_m2"]),
         )
 
+    # VGV: envelope (projeção térreo) × R$/m² mediano de APARTAMENTO no bairro (comps de venda).
+    # Bairro casado pela mesma normalização das siglas (upper + só A-Z0-9) — dispensa unaccent.
+    vgv = None
+    prow = conn.execute(
+        text(
+            """
+            SELECT preco_m2_mediana, n
+            FROM market.preco_m2_bairro
+            WHERE tipo = 'Apartamento'
+              AND regexp_replace(upper(bairro),  '[^A-Z0-9]', '', 'g')
+                = regexp_replace(upper(:bairro), '[^A-Z0-9]', '', 'g')
+            ORDER BY n DESC
+            LIMIT 1
+            """
+        ),
+        {"bairro": row["bairro"] or ""},
+    ).mappings().first()
+    if prow is not None and row["area_projecao_max_m2"] is not None:
+        est = estimar_vgv(_f(row["area_projecao_max_m2"]), _f(prow["preco_m2_mediana"]))
+        if est is not None:
+            vgv = VGV(
+                preco_m2_venda=est.preco_m2_venda,
+                n_comps=prow["n"],
+                eficiencia=est.eficiencia,
+                pavimentos=est.pavimentos,
+                area_projecao_m2=est.area_projecao_m2,
+                area_privativa_pavto_m2=est.area_privativa_pavto_m2,
+                vgv_por_pavimento=est.vgv_por_pavimento,
+                area_construida_m2=est.area_construida_m2,
+                area_privativa_total_m2=est.area_privativa_total_m2,
+                vgv_total=est.vgv_total,
+                premissas=(
+                    f"R$/m² = mediana de {prow['n']} comps de apartamento à venda em "
+                    f"{row['bairro']}; eficiência {est.eficiencia:.0%}; "
+                    f"{est.pavimentos} pavimentos (premissa — altura é espacial em JP)"
+                ),
+            )
+
     centroid = [row["lng"], row["lat"]] if row["lng"] is not None else None
     return LotFicha(
         id=row["id"],
@@ -205,4 +244,27 @@ def get_lot(lot_id: int, conn: Connection = Depends(get_conn)) -> LotFicha:
         viability=viability,
         restricao=restricao,
         listing=listing,
+        vgv=vgv,
+    )
+
+
+@router.get("/lots/{lot_id}", response_model=LotFicha)
+def get_lot(lot_id: int, conn: Connection = Depends(get_conn)) -> LotFicha:
+    ficha = _load_ficha(lot_id, conn)
+    if ficha is None:
+        raise HTTPException(status_code=404, detail="lote não encontrado")
+    return ficha
+
+
+@router.get("/lots/{lot_id}/pdf")
+def get_lot_pdf(lot_id: int, conn: Connection = Depends(get_conn)) -> Response:
+    """Ficha do lote em PDF (com VGV) — levável ao comitê."""
+    ficha = _load_ficha(lot_id, conn)
+    if ficha is None:
+        raise HTTPException(status_code=404, detail="lote não encontrado")
+    pdf = build_ficha_pdf(ficha)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="ficha-lote-{lot_id}.pdf"'},
     )
