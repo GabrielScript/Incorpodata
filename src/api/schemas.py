@@ -35,6 +35,33 @@ class Listing(BaseModel):
     # url NÃO exposta aqui (LGPD): revelar contato sob demanda em endpoint próprio.
 
 
+class VGV(BaseModel):
+    """Estudo de massa rápido: envelope LUOS × R$/m² de venda (comps no raio do lote)."""
+    preco_m2_venda: float          # mediana dos comps de Apartamento (raio ou bairro)
+    preco_m2_q1: float | None = None   # 1º quartil → piso da faixa
+    preco_m2_q3: float | None = None   # 3º quartil → teto da faixa
+    n_comps: int                   # tamanho da amostra (robustez da mediana)
+    fonte_preco: str = "bairro"    # 'raio' (micro-localização) | 'bairro' (fallback)
+    eficiencia: float              # premissa: área privativa ÷ construída
+    pavimentos: int                # premissa (altura em JP é espacial, ainda não por lote)
+    area_projecao_m2: float        # TO_máx × área do lote (footprint)
+    area_privativa_pavto_m2: float
+    vgv_por_pavimento: float       # headline sólido (independe de altura)
+    vgv_por_pavimento_min: float | None = None   # faixa Q1–Q3 (contra falsa precisão)
+    vgv_por_pavimento_max: float | None = None
+    area_construida_m2: float
+    area_privativa_total_m2: float
+    vgv_total: float               # sob a premissa de pavimentos
+    vgv_total_min: float | None = None
+    vgv_total_max: float | None = None
+    custo_terreno: float | None = None
+    custo_obra_m2: float | None = None
+    custo_obra: float | None = None
+    margem: float | None = None
+    margem_pct: float | None = None
+    premissas: str
+
+
 class LotFicha(BaseModel):
     id: int
     inscricao: str | None = None
@@ -50,6 +77,7 @@ class LotFicha(BaseModel):
     viability: Viability | None = None
     restricao: Restricao
     listing: Listing | None = None
+    vgv: VGV | None = None
 
 
 # ───────── auth ─────────

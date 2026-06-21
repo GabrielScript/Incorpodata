@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LotFicha } from '../api/types'
+import { addLandbank, lotPdfUrl } from '../api/client'
 import { GLOSSARY } from '../glossary'
 
 const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
@@ -52,15 +53,70 @@ export function LotFichaPanel({ lot, loading, error, onBack }: Props) {
   )
 }
 
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
 function Resumo({ lot }: { lot: LotFicha }) {
   const v = lot.viability
   const proj = v?.area_projecao_max_m2
+  const vgv = lot.vgv
+  const [save, setSave] = useState<SaveState>('idle')
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
+
+  async function onSaveLandbank() {
+    setSave('saving')
+    setSaveMsg(null)
+    try {
+      await addLandbank(lot.id)
+      setSave('saved')
+    } catch (e) {
+      setSave('error')
+      setSaveMsg((e as Error).message)
+    }
+  }
+
   return (
     <div className="resumo">
       <h2>{lot.logradouro ?? `Lote ${lot.id}`}</h2>
       <div className="sub">
         {lot.bairro ?? '—'} · {m2(lot.area_geom_m2)} · {v?.sigla ?? 's/ zona'}
       </div>
+
+      {vgv && (
+        <div className="vgv">
+          <div className="vgv-h">
+            <Term k="VGV" label="VGV potencial" />
+            <span className="tag prelim" title="Estimativa preliminar de estudo de massa — não substitui projeto/avaliação">
+              preliminar
+            </span>
+          </div>
+          <div className="vgv-nums">
+            <div>
+              <div className="vgv-big">{brl.format(vgv.vgv_por_pavimento)}</div>
+              <div className="k">
+                por pavimento
+                {vgv.vgv_por_pavimento_min != null && vgv.vgv_por_pavimento_max != null && (
+                  <>
+                    {' '}
+                    · faixa {brl.format(vgv.vgv_por_pavimento_min)}–{brl.format(vgv.vgv_por_pavimento_max)}
+                  </>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="vgv-big">{brl.format(vgv.vgv_total)}</div>
+              <div className="k">total · {vgv.pavimentos} pav (premissa)</div>
+            </div>
+          </div>
+          <div className="vgv-foot">
+            {brl.format(vgv.preco_m2_venda)}/m²
+            {vgv.preco_m2_q1 != null && vgv.preco_m2_q3 != null && (
+              <> (Q1–Q3 {brl.format(vgv.preco_m2_q1)}–{brl.format(vgv.preco_m2_q3)})</>
+            )}{' '}
+            · n={nf0.format(vgv.n_comps)} · {vgv.fonte_preco === 'raio' ? 'raio do lote' : 'bairro'} · efic{' '}
+            {pct(vgv.eficiencia * 100)}
+          </div>
+        </div>
+      )}
 
       <div className="cards">
         <div className="card">
@@ -99,15 +155,15 @@ function Resumo({ lot }: { lot: LotFicha }) {
           {v.usos_obs}
         </div>
       )}
-      <div className="phase">▸ Melhor uso (fase 2) · ▸ Valor ótimo p/ pagar (fase 3)</div>
       <div className="actions">
-        <button className="btn" disabled title="Fase 3">
-          + landbank
+        <button className="btn" onClick={onSaveLandbank} disabled={save === 'saving' || save === 'saved'}>
+          {save === 'saved' ? '✓ no landbank' : save === 'saving' ? 'salvando…' : '+ landbank'}
         </button>
-        <button className="btn ghost" disabled title="Fase 4">
+        <a className="btn ghost" href={lotPdfUrl(lot.id)} target="_blank" rel="noreferrer">
           PDF
-        </button>
+        </a>
       </div>
+      {save === 'error' && <div className="save-err">Não salvou: {saveMsg}</div>}
     </div>
   )
 }
@@ -142,6 +198,29 @@ function Completo({ lot }: { lot: LotFicha }) {
         <Row term="Recuo" k="Recuo fundo" val={v?.recuo_fundo ?? '—'} />
         <Row term="Usos" k="Usos" val={v?.usos_obs ?? '—'} />
       </Section>
+
+      {lot.vgv && (
+        <Section title="VGV potencial (estudo de massa · preliminar)">
+          <Row term="VGV" k="VGV por pavimento" val={brl.format(lot.vgv.vgv_por_pavimento)} />
+          {lot.vgv.vgv_por_pavimento_min != null && lot.vgv.vgv_por_pavimento_max != null && (
+            <Row
+              k="Faixa por pavimento (Q1–Q3)"
+              val={`${brl.format(lot.vgv.vgv_por_pavimento_min)} – ${brl.format(lot.vgv.vgv_por_pavimento_max)}`}
+            />
+          )}
+          <Row k={`VGV total (${lot.vgv.pavimentos} pav, premissa)`} val={brl.format(lot.vgv.vgv_total)} />
+          <Row
+            k={`R$/m² venda (${lot.vgv.fonte_preco === 'raio' ? 'raio do lote' : 'bairro'})`}
+            val={
+              lot.vgv.preco_m2_q1 != null && lot.vgv.preco_m2_q3 != null
+                ? `${brl.format(lot.vgv.preco_m2_venda)} · Q1–Q3 ${brl.format(lot.vgv.preco_m2_q1)}–${brl.format(lot.vgv.preco_m2_q3)} · n=${lot.vgv.n_comps}`
+                : `${brl.format(lot.vgv.preco_m2_venda)} · n=${lot.vgv.n_comps}`
+            }
+          />
+          <Row k="Área privativa total" val={m2(lot.vgv.area_privativa_total_m2)} />
+          <Row k="Eficiência" val={pct(lot.vgv.eficiencia * 100)} />
+        </Section>
+      )}
 
       <Section title="Mercado">
         <Row

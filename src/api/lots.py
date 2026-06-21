@@ -10,9 +10,18 @@ from sqlalchemy.engine import Connection
 from src.api.db import get_conn
 from src.api.pdf import build_ficha_pdf
 from src.api.schemas import VGV, Listing, LotFicha, Restricao, Viability
-from src.api.viability import altura_label, estimar_vgv
+from src.api.viability import (
+    PrecoStats,
+    altura_label,
+    escolher_preco_ref,
+    estimar_vgv,
+)
 
 router = APIRouter(prefix="/api", tags=["lots"])
+
+# Raio (m, SRID 31985) p/ a mediana de R$/m² na MICRO-localização do lote. Mediana do bairro
+# inteiro mascara variância intra-bairro (frente-mar × fundo); só caímos nela se o raio for ralo.
+RAIO_COMPS_M = 800.0
 
 # Ordenações permitidas pelas variáveis que importam na originação de terreno:
 # tamanho do lote, o que cabe no térreo, preço e preço/m² (barganha). As chaves são a
@@ -190,13 +199,33 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
             preco_m2=_f(lrow["preco_m2"]),
         )
 
-    # VGV: envelope (projeção térreo) × R$/m² mediano de APARTAMENTO no bairro (comps de venda).
-    # Bairro casado pela mesma normalização das siglas (upper + só A-Z0-9) — dispensa unaccent.
+    # VGV: envelope (projeção térreo) × R$/m² mediano de APARTAMENTO (comps de venda).
+    # Preferimos a mediana dos comps no RAIO do lote (micro-localização); caímos no bairro
+    # quando o raio tem poucos comps. Faixa Q1–Q3 explícita p/ não fingir precisão de ponto.
     vgv = None
+    raio_row = conn.execute(
+        text(
+            """
+            SELECT
+              percentile_cont(0.5)  WITHIN GROUP (ORDER BY c.preco_m2) AS mediana,
+              percentile_cont(0.25) WITHIN GROUP (ORDER BY c.preco_m2) AS q1,
+              percentile_cont(0.75) WITHIN GROUP (ORDER BY c.preco_m2) AS q3,
+              count(*) AS n
+            FROM market.comps c, geo.lotes l
+            WHERE l.id = :id
+              AND c.tipo = 'Apartamento' AND c.business = 'SALE'
+              AND c.geom IS NOT NULL
+              AND c.preco_m2 BETWEEN 800 AND 30000
+              AND ST_DWithin(c.geom, l.geom, :raio_m)
+            """
+        ),
+        {"id": lot_id, "raio_m": RAIO_COMPS_M},
+    ).mappings().first()
+    # Mesma normalização das siglas (upper + só A-Z0-9) — dispensa unaccent.
     prow = conn.execute(
         text(
             """
-            SELECT preco_m2_mediana, n
+            SELECT preco_m2_mediana, preco_m2_q1, preco_m2_q3, n
             FROM market.preco_m2_bairro
             WHERE tipo = 'Apartamento'
               AND regexp_replace(upper(bairro),  '[^A-Z0-9]', '', 'g')
@@ -207,24 +236,52 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
         ),
         {"bairro": row["bairro"] or ""},
     ).mappings().first()
-    if prow is not None and row["area_projecao_max_m2"] is not None:
-        est = estimar_vgv(_f(row["area_projecao_max_m2"]), _f(prow["preco_m2_mediana"]))
+
+    raio_stats = None
+    if raio_row is not None and raio_row["n"] and raio_row["mediana"] is not None:
+        raio_stats = PrecoStats(
+            _f(raio_row["mediana"]), _f(raio_row["q1"]), _f(raio_row["q3"]), int(raio_row["n"])
+        )
+    bairro_stats = None
+    if prow is not None and prow["preco_m2_mediana"] is not None:
+        bairro_stats = PrecoStats(
+            _f(prow["preco_m2_mediana"]), _f(prow["preco_m2_q1"]), _f(prow["preco_m2_q3"]), int(prow["n"])
+        )
+
+    ref = escolher_preco_ref(raio_stats, bairro_stats)
+    if ref is not None and row["area_projecao_max_m2"] is not None:
+        est = estimar_vgv(
+            _f(row["area_projecao_max_m2"]), ref.preco_m2,
+            preco_m2_q1=ref.q1, preco_m2_q3=ref.q3,
+        )
         if est is not None:
+            origem = (
+                f"comps de apartamento à venda num raio de {RAIO_COMPS_M:.0f} m do lote"
+                if ref.fonte == "raio"
+                else f"comps de apartamento à venda em {row['bairro']} (raio sem comps suficientes)"
+            )
             vgv = VGV(
                 preco_m2_venda=est.preco_m2_venda,
-                n_comps=prow["n"],
+                preco_m2_q1=ref.q1,
+                preco_m2_q3=ref.q3,
+                n_comps=ref.n,
+                fonte_preco=ref.fonte,
                 eficiencia=est.eficiencia,
                 pavimentos=est.pavimentos,
                 area_projecao_m2=est.area_projecao_m2,
                 area_privativa_pavto_m2=est.area_privativa_pavto_m2,
                 vgv_por_pavimento=est.vgv_por_pavimento,
+                vgv_por_pavimento_min=est.vgv_por_pavimento_min,
+                vgv_por_pavimento_max=est.vgv_por_pavimento_max,
                 area_construida_m2=est.area_construida_m2,
                 area_privativa_total_m2=est.area_privativa_total_m2,
                 vgv_total=est.vgv_total,
+                vgv_total_min=est.vgv_total_min,
+                vgv_total_max=est.vgv_total_max,
                 premissas=(
-                    f"R$/m² = mediana de {prow['n']} comps de apartamento à venda em "
-                    f"{row['bairro']}; eficiência {est.eficiencia:.0%}; "
-                    f"{est.pavimentos} pavimentos (premissa — altura é espacial em JP)"
+                    f"R$/m² = mediana de {ref.n} {origem} (faixa Q1–Q3); "
+                    f"eficiência {est.eficiencia:.0%}; {est.pavimentos} pavimentos "
+                    f"(premissa — altura é espacial em JP). VGV preliminar."
                 ),
             )
 

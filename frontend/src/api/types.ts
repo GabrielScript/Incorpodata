@@ -29,6 +29,42 @@ export interface Listing {
   preco_m2?: number | null
 }
 
+export interface VGV {
+  preco_m2_venda: number
+  preco_m2_q1?: number | null
+  preco_m2_q3?: number | null
+  n_comps: number
+  fonte_preco: string // 'raio' | 'bairro'
+  eficiencia: number
+  pavimentos: number
+  area_projecao_m2: number
+  area_privativa_pavto_m2: number
+  vgv_por_pavimento: number
+  vgv_por_pavimento_min?: number | null
+  vgv_por_pavimento_max?: number | null
+  area_construida_m2: number
+  area_privativa_total_m2: number
+  vgv_total: number
+  vgv_total_min?: number | null
+  vgv_total_max?: number | null
+  custo_terreno?: number | null
+  custo_obra_m2?: number | null
+  custo_obra?: number | null
+  margem?: number | null
+  margem_pct?: number | null
+  premissas: string
+}
+
+export interface LandbankItem {
+  id: number
+  lote_id: number
+  estagio: string
+  notas?: string | null
+  logradouro?: string | null
+  bairro?: string | null
+  area_geom_m2?: number | null
+}
+
 export interface LotFicha {
   id: number
   inscricao?: string | null
@@ -44,6 +80,7 @@ export interface LotFicha {
   viability?: Viability | null
   restricao: Restricao
   listing?: Listing | null
+  vgv?: VGV | null
 }
 
 // Propriedades de cada feature no GeoJSON de /api/lots
