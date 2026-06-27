@@ -12,7 +12,14 @@ from sqlalchemy.engine import Connection
 
 from src.api.db import get_conn
 from src.api.schemas import RegisterIn, TokenOut, UserOut
-from src.api.security import cria_token, decodifica_token, hash_senha, verifica_senha
+from src.api.security import (
+    convite_valido,
+    cria_token,
+    decodifica_token,
+    hash_senha,
+    registro_aberto,
+    verifica_senha,
+)
 
 log = logging.getLogger("terraiq.auth")
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -36,7 +43,11 @@ def rate_limit(request: Request, limit: int = 10, window: int = 900) -> None:
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(body: RegisterIn, request: Request, conn: Connection = Depends(get_conn)) -> UserOut:
     rate_limit(request)
-    # TODO(MVP): fechar o registro (convite/admin) antes de produção.
+    # Registro fechado por convite: sem env REGISTER_INVITE_CODE → ninguém se cadastra.
+    if not registro_aberto():
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "registro desabilitado")
+    if not convite_valido(body.invite_code):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "código de convite inválido")
     exists = conn.execute(text("SELECT 1 FROM app.users WHERE email = :e"), {"e": body.email}).first()
     if exists:
         raise HTTPException(status.HTTP_409_CONFLICT, "e-mail já cadastrado")

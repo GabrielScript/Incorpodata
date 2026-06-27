@@ -85,6 +85,7 @@ class RegisterIn(BaseModel):
     email: EmailStr
     senha: str = Field(min_length=8, max_length=128)
     nome: str | None = Field(default=None, max_length=120)
+    invite_code: str | None = Field(default=None, max_length=200)  # registro por convite
 
 
 class UserOut(BaseModel):
