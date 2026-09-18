@@ -1,0 +1,40 @@
+# Controla o que sobe pro Cloud Build (gcloud run deploy --source .)
+.git
+.gitignore
+.venv
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Frontend: deps e build refeitos no estágio web do Dockerfile
+frontend/node_modules/
+frontend/dist/
+
+# Dados brutos e dumps
+data/
+*.json
+!frontend/package.json
+!frontend/tsconfig*.json
+!design-system/design-tokens.json
+sql/seed_demo_anuncios.sql
+
+# Artefatos e arquivos locais que nunca devem subir
+*.pdf
+*.dump
+*.sql.gz
+*.zip
+.env
+.env.*
+docs/
+tests/
+Password.txt
+*.txt
+!requirements*.txt
+sessions_state.md
+agent-skills/
+artifacts/
+geopandas/
+maps/
+.claude/

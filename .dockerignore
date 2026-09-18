@@ -1,0 +1,29 @@
+# Contexto de build enxuto — fora dados, venv, git, node_modules e os JSONs gigantes.
+.git
+.venv
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Frontend: deps e build são refeitos no estágio web
+frontend/node_modules/
+frontend/dist/
+
+# Dados brutos e dumps (não vão pra imagem; a API fala com o Cloud SQL)
+data/
+*.json
+!frontend/package.json
+!frontend/tsconfig*.json
+!design-system/design-tokens.json
+sql/seed_demo_anuncios.sql
+
+# Artefatos diversos
+*.pdf
+*.dump
+*.sql.gz
+.env
+.env.*
+docs/
+tests/

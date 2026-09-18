@@ -23,10 +23,12 @@ tenacity>=8.5
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.8
+reportlab>=4.2          # PDF da ficha (puro Python, sem libs de sistema)
 
 # Auth + migrations
 alembic>=1.13
 passlib[bcrypt]>=1.7
+bcrypt>=4.0,<4.1          # passlib 1.7.4 não suporta bcrypt 4.1+ (remove __about__ + checa 72 bytes)
 python-jose[cryptography]>=3.3
 python-multipart>=0.0.9
 email-validator>=2.2

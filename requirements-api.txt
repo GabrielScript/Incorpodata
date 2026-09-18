@@ -1,0 +1,20 @@
+# Runtime ENXUTO da API (Cloud Run) — sem o stack geo de ingestão (geopandas/fiona/GDAL),
+# que só é usado nos pipelines de carga, não na API. Mantém a imagem pequena e o build rápido.
+
+# DB
+SQLAlchemy>=2.0
+psycopg2-binary>=2.9
+
+# API
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
+reportlab>=4.2
+
+# Auth + migrations
+alembic>=1.13
+passlib[bcrypt]>=1.7
+bcrypt>=4.0,<4.1
+python-jose[cryptography]>=3.3
+python-multipart>=0.0.9
+email-validator>=2.2
