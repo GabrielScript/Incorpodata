@@ -1,4 +1,4 @@
-"""Orquestra a carga completa do TerraIQ, do staging à viabilidade por lote.
+"""Orquestra a carga completa do IncorpoData, do staging à viabilidade por lote.
 
 Pré-requisitos:
   - PostGIS no ar:  docker compose up -d

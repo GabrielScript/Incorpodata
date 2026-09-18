@@ -1,4 +1,4 @@
-# TerraIQ — App de viabilidade de terrenos (spec)
+# IncorpoData — App de viabilidade de terrenos (spec)
 
 Data: 2026-06-15 · Status: aprovado p/ implementação
 

@@ -1,4 +1,4 @@
-# TerraIQ — Design System
+# IncorpoData — Design System
 
 Sistema visual do frontend (React + TypeScript + MapLibre). Fonte da verdade dos tokens:
 `frontend/src/index.css` (`:root`) — espelhado em `design-system/design-tokens.json`.

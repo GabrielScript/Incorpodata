@@ -1,4 +1,4 @@
-"""Entrada da API TerraIQ.
+"""Entrada da API IncorpoData.
 
 Rodar (na raiz do projeto, com o PostGIS no ar):
     uvicorn src.api.main:app --reload
@@ -13,7 +13,7 @@ from src.api.auth import router as auth_router
 from src.api.landbank import router as landbank_router
 from src.api.lots import router as lots_router
 
-app = FastAPI(title="TerraIQ API", version="0.1.0")
+app = FastAPI(title="IncorpoData API", version="0.1.0")
 
 # Dev: libera o Vite (5173). Em produção, restringir à origem real.
 app.add_middleware(

@@ -1,6 +1,6 @@
 {
   "$meta": {
-    "project": "TerraIQ",
+    "project": "IncorpoData",
     "description": "Tokens do frontend (React + MapLibre). Espelham :root em frontend/src/index.css.",
     "updated": "2026-06-16",
     "mode": "light-only (decisão de produto — ferramenta técnica diurna)"

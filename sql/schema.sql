@@ -1,4 +1,4 @@
--- TerraIQ — modelo de dados (PostGIS)
+-- IncorpoData — modelo de dados (PostGIS)
 -- SRID interno: 31985 (SIRGAS 2000 / UTM 25S) → ST_Area sai em m² direto p/ João Pessoa.
 
 CREATE EXTENSION IF NOT EXISTS postgis;
