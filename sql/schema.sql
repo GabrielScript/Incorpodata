@@ -157,6 +157,16 @@ CREATE INDEX IF NOT EXISTS idx_comps_geom   ON market.comps USING GIST (geom);
 ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS endereco  text;  -- street do anúncio (entrada do geocoder)
 ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS geo_fonte text;  -- 'fonte' (scraper) | 'nominatim'
 
+-- Cache de consultas ao Nominatim (1 req/s): nunca repetir consulta, nem as que falharam.
+CREATE TABLE IF NOT EXISTS market.geocode_cache (
+  chave        text PRIMARY KEY,     -- cache_key(endereco, bairro) — normalizada
+  consulta     text NOT NULL,        -- query enviada (auditoria/debug)
+  lat          double precision,
+  lon          double precision,
+  ok           boolean NOT NULL,     -- false = Nominatim não achou/fora de JP (não re-tentar)
+  resolvido_em timestamptz DEFAULT now()
+);
+
 -- R$/m² por bairro e tipo: mediana + quartis + N. Outliers saneados (faixa plausível de
 -- venda) para a mediana não ser puxada por erro de digitação/área. É o número que o VGV usa.
 CREATE OR REPLACE VIEW market.preco_m2_bairro AS

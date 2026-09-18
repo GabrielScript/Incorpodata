@@ -215,6 +215,9 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
             WHERE l.id = :id
               AND c.tipo = 'Apartamento' AND c.business = 'SALE'
               AND c.geom IS NOT NULL
+              -- pino aproximado de portal (dezenas de anúncios no mesmo ponto) distorce a
+              -- mediana espacial: fora do raio; segue valendo p/ a mediana de bairro (view)
+              AND c.geo_fonte IS DISTINCT FROM 'fonte_aprox'
               AND c.preco_m2 BETWEEN 800 AND 30000
               AND ST_DWithin(c.geom, l.geom, :raio_m)
             """
