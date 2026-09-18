@@ -145,6 +145,33 @@ button {
 .legend .sw.venda {
   background: var(--venda);
 }
+.basemap-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+.basemap-toggle button {
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.basemap-toggle button + button {
+  border-left: 1px solid var(--border-strong);
+}
+.basemap-toggle button.on {
+  background: var(--accent);
+  color: #fff;
+}
 .panel {
   width: 380px;
   border-left: 1px solid var(--border);
@@ -296,6 +323,22 @@ button {
   font-size: 12.5px;
   margin-bottom: 14px;
   font-variant-numeric: tabular-nums;
+}
+.streetview-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.streetview-link:hover {
+  background: #dcebe8;
 }
 .cards {
   display: grid;
@@ -465,7 +508,8 @@ button {
   }
   /* 16px evita o auto-zoom do iOS ao focar campo */
   .field select,
-  .field .num {
+  .field .num,
+  .inp {
     font-size: 16px;
   }
 }
@@ -490,6 +534,16 @@ button {
 }
 
 /* ───────── VGV (destaque na ficha) ───────── */
+.aviso-suspeita {
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: #fdecec;
+  color: var(--danger);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.35;
+}
 .vgv {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -540,6 +594,65 @@ button {
   font-variant-numeric: tabular-nums;
   border-top: 1px dashed var(--border-strong);
   padding-top: 7px;
+}
+/* Valor residual ("quanto pagar") — número de decisão; destaque distinto do VGV. */
+.residual {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.residual-h {
+  color: var(--accent-ink);
+  text-transform: uppercase;
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.residual-h .prelim {
+  margin-left: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 7px;
+  vertical-align: middle;
+}
+.residual-big {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.residual .k {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.residual-inviavel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger);
+}
+.barganha {
+  margin-top: 8px;
+  border-top: 1px dashed var(--border-strong);
+  padding-top: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.barganha.ok {
+  color: var(--accent-ink);
+}
+.barganha.caro {
+  color: var(--danger);
 }
 .actions a.btn {
   text-decoration: none;
@@ -675,6 +788,127 @@ button {
   padding: 8px 10px;
   font-size: 12px;
   overflow-x: auto;
+}
+
+/* ───────── auth (top bar + modal) ───────── */
+.auth-slot {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.user-chip {
+  font-size: 12.5px;
+  color: var(--muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.linkbtn {
+  background: none;
+  border: 0;
+  color: var(--accent-ink);
+  font-size: 13px;
+  padding: 4px;
+}
+.btn.sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(24, 28, 31, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal {
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+  padding: 20px;
+}
+.modal-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.modal-h h2 {
+  font-size: 17px;
+  margin: 0;
+}
+.modal-x {
+  background: none;
+  border: 0;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  padding: 4px 6px;
+}
+.modal-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin: 0 0 16px;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.inp {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  padding: 9px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.auth-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: -4px 0 0;
+}
+.auth-err {
+  color: var(--danger);
+  font-size: 12.5px;
+  margin: 0;
+}
+.auth-form .btn {
+  margin-top: 4px;
+  padding: 10px;
+  font-size: 14px;
+  justify-content: center;
+}
+.auth-switch {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+}
+.auth-switch button {
+  background: none;
+  border: 0;
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

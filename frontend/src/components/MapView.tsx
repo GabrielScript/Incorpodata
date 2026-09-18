@@ -1,9 +1,16 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import type { FeatureCollection, Geometry } from 'geojson'
-import type { GeoJSONSource, Map as MLMap, StyleSpecification } from 'maplibre-gl'
+import type {
+  ExpressionSpecification,
+  GeoJSONSource,
+  Map as MLMap,
+  StyleSpecification,
+} from 'maplibre-gl'
 
-// Basemap claro sem chave (CARTO Positron) — combina com "software técnico claro".
+// Dois basemaps SEM chave, alternáveis: CARTO Positron (claro, técnico) e Esri World Imagery
+// (satélite). O satélite mostra o terreno real visto de cima, com o polígono do lote por cima —
+// dá pra ver se está vago, o que há nele e a vizinhança. Esri começa oculto.
 const STYLE: StyleSpecification = {
   version: 8,
   sources: {
@@ -17,9 +24,54 @@ const STYLE: StyleSpecification = {
       tileSize: 256,
       attribution: '© OpenStreetMap · © CARTO',
     },
+    esri: {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
+    },
   },
-  layers: [{ id: 'carto', type: 'raster', source: 'carto' }],
+  layers: [
+    { id: 'carto', type: 'raster', source: 'carto' },
+    { id: 'esri', type: 'raster', source: 'esri', layout: { visibility: 'none' } },
+  ],
 }
+
+// Paint do lote, reusado no addLayer e no toggle (fonte única — não duplicar expressão).
+// No mapa: cheio e colorido (legibilidade). No satélite: quase só contorno branco, pra a
+// imagem do terreno aparecer por baixo do polígono.
+const FILL_MAP: ExpressionSpecification = [
+  'case',
+  ['boolean', ['feature-state', 'selected'], false],
+  0.6,
+  ['case', ['get', 'a_venda'], 0.45, 0.22],
+]
+const FILL_SAT: ExpressionSpecification = [
+  'case',
+  ['boolean', ['feature-state', 'selected'], false],
+  0.18,
+  0,
+]
+const LINE_COLOR_MAP: ExpressionSpecification = [
+  'case',
+  ['boolean', ['feature-state', 'selected'], false],
+  '#0b3d39',
+  '#516068',
+]
+const LINE_WIDTH_MAP: ExpressionSpecification = [
+  'case',
+  ['boolean', ['feature-state', 'selected'], false],
+  2.5,
+  0.5,
+]
+const LINE_WIDTH_SAT: ExpressionSpecification = [
+  'case',
+  ['boolean', ['feature-state', 'selected'], false],
+  3,
+  1.2,
+]
 
 const BANCARIOS: [number, number] = [-34.834, -7.142] // [lng, lat]
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
@@ -36,6 +88,7 @@ export function MapView({ data, selectedId, onSelect }: Props) {
   const readyRef = useRef(false)
   const selRef = useRef<number | null>(null)
   const onSelectRef = useRef(onSelect)
+  const [satellite, setSatellite] = useState(false)
   useEffect(() => {
     onSelectRef.current = onSelect
   })
@@ -60,12 +113,7 @@ export function MapView({ data, selectedId, onSelect }: Props) {
         source: 'lots',
         paint: {
           'fill-color': ['case', ['get', 'a_venda'], '#0f766e', '#7c878d'],
-          'fill-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            0.6,
-            ['case', ['get', 'a_venda'], 0.45, 0.22],
-          ],
+          'fill-opacity': FILL_MAP,
         },
       })
       m.addLayer({
@@ -73,18 +121,8 @@ export function MapView({ data, selectedId, onSelect }: Props) {
         type: 'line',
         source: 'lots',
         paint: {
-          'line-color': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            '#0b3d39',
-            '#516068',
-          ],
-          'line-width': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            2.5,
-            0.5,
-          ],
+          'line-color': LINE_COLOR_MAP,
+          'line-width': LINE_WIDTH_MAP,
         },
       })
       readyRef.current = true
@@ -140,9 +178,27 @@ export function MapView({ data, selectedId, onSelect }: Props) {
     selRef.current = selectedId
   }, [selectedId])
 
+  // basemap satélite on/off + legibilidade do polígono sobre a imagem
+  useEffect(() => {
+    const m = mapRef.current
+    if (!m || !readyRef.current) return
+    m.setLayoutProperty('esri', 'visibility', satellite ? 'visible' : 'none')
+    m.setPaintProperty('lots-fill', 'fill-opacity', satellite ? FILL_SAT : FILL_MAP)
+    m.setPaintProperty('lots-line', 'line-color', satellite ? '#ffffff' : LINE_COLOR_MAP)
+    m.setPaintProperty('lots-line', 'line-width', satellite ? LINE_WIDTH_SAT : LINE_WIDTH_MAP)
+  }, [satellite])
+
   return (
     <div className="map-wrap">
       <div ref={containerRef} className="map" />
+      <div className="basemap-toggle" role="group" aria-label="Tipo de mapa">
+        <button type="button" className={satellite ? '' : 'on'} onClick={() => setSatellite(false)}>
+          Mapa
+        </button>
+        <button type="button" className={satellite ? 'on' : ''} onClick={() => setSatellite(true)}>
+          Satélite
+        </button>
+      </div>
       <div className="legend">
         <span>
           <i className="sw vago" /> Vago

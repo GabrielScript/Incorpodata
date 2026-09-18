@@ -1,5 +1,11 @@
 // Espelha os modelos da API (src/api/schemas.py).
 
+export interface User {
+  id: number
+  email: string
+  nome?: string | null
+}
+
 export interface Viability {
   sigla?: string | null
   nome_zona?: string | null
@@ -55,6 +61,33 @@ export interface VGV {
   premissas: string
 }
 
+export interface Residual {
+  custo_obra_m2: number
+  margem_alvo: number
+  custos_indiretos_pct: number
+  residual_por_pavimento: number
+  residual_por_pavimento_min?: number | null
+  residual_por_pavimento_max?: number | null
+  residual_total: number
+  residual_total_min?: number | null
+  residual_total_max?: number | null
+  terreno_pct_vgv?: number | null
+  preco_pedido?: number | null
+  gap_pct?: number | null
+  cabe_no_bolso?: boolean | null
+  premissas: string
+}
+
+export interface Score {
+  total: number
+  rentabilidade: number
+  aproveitamento: number
+  localizacao: number
+  confianca: number
+  penalidade_altura: boolean
+  nota_metodo: string
+}
+
 export interface LandbankItem {
   id: number
   lote_id: number
@@ -76,11 +109,31 @@ export interface LotFicha {
   tipo?: string | null
   area_cad_m2?: number | null
   area_geom_m2?: number | null
+  geometria_suspeita?: boolean
+  geometria_aviso?: string | null
   centroid?: [number, number] | null
   viability?: Viability | null
   restricao: Restricao
   listing?: Listing | null
   vgv?: VGV | null
+  vgv_bloqueado?: boolean
+  residual?: Residual | null
+  residual_bloqueado?: boolean
+  score?: Score | null
+  score_bloqueado?: boolean
+}
+
+export interface Oportunidade {
+  lot_id: number
+  logradouro?: string | null
+  bairro?: string | null
+  area_m2?: number | null
+  vgv_total: number
+  residual_total: number
+  terreno_pct_vgv?: number | null
+  gap_pct?: number | null
+  cabe_no_bolso?: boolean | null
+  score: Score
 }
 
 // Propriedades de cada feature no GeoJSON de /api/lots
