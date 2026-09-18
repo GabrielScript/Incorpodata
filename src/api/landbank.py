@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from src.api.auth import get_current_user
+from src.api.auth import get_current_plan, get_current_user
 from src.api.db import get_conn
+from src.api.plans import limits_for
 from src.api.schemas import LandbankIn, LandbankItem, LandbankPatch
 
 router = APIRouter(prefix="/api/landbank", tags=["landbank"])
@@ -31,8 +32,27 @@ def list_items(user_id: int = Depends(get_current_user), conn: Connection = Depe
 
 @router.post("", response_model=LandbankItem, status_code=status.HTTP_201_CREATED)
 def add_item(
-    body: LandbankIn, user_id: int = Depends(get_current_user), conn: Connection = Depends(get_conn)
+    body: LandbankIn,
+    user_id: int = Depends(get_current_user),
+    plano: str = Depends(get_current_plan),
+    conn: Connection = Depends(get_conn),
 ) -> LandbankItem:
+    # Gate de plano: nº de lotes salvos. None = ilimitado. Lote já salvo (ON CONFLICT) não conta.
+    teto = limits_for(plano).landbank_max
+    if teto is not None:
+        ja_salvo = conn.execute(
+            text("SELECT 1 FROM app.landbank_items WHERE user_id = :u AND lote_id = :l"),
+            {"u": user_id, "l": body.lote_id},
+        ).first()
+        if ja_salvo is None:
+            n = conn.execute(
+                text("SELECT count(*) FROM app.landbank_items WHERE user_id = :u"), {"u": user_id}
+            ).scalar_one()
+            if n >= teto:
+                raise HTTPException(
+                    status.HTTP_402_PAYMENT_REQUIRED,
+                    f"limite de {teto} lotes no plano atual; faça upgrade para salvar mais",
+                )
     conn.execute(
         text(
             "INSERT INTO app.landbank_items (user_id, lote_id) VALUES (:u, :l) "

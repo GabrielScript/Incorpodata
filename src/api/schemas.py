@@ -92,6 +92,7 @@ class UserOut(BaseModel):
     id: int
     email: EmailStr
     nome: str | None = None
+    plano: str = "free"  # tier de assinatura → front mostra/esconde features pagas
 
 
 class TokenOut(BaseModel):

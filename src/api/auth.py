@@ -24,6 +24,8 @@ from src.api.security import (
 log = logging.getLogger("terraiq.auth")
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 oauth2 = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# auto_error=False: rotas freemium (mapa/ficha) aceitam anônimo → cai no tier free.
+oauth2_opt = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # Rate-limit simples em memória, por IP (MVP). Em produção: Redis ou no proxy/CDN.
 _HITS: dict[str, deque[float]] = defaultdict(deque)
@@ -94,11 +96,34 @@ def get_current_user(
     return int(sub)
 
 
+def get_current_plan(
+    user_id: int = Depends(get_current_user), conn: Connection = Depends(get_conn)
+) -> str:
+    """Tier do usuário autenticado (exige token). Usado por rotas pagas (PDF, landbank)."""
+    row = conn.execute(text("SELECT plano FROM app.users WHERE id = :i"), {"i": user_id}).first()
+    return str(row[0]) if row else "free"
+
+
+def get_optional_plan(
+    token: str | None = Depends(oauth2_opt), conn: Connection = Depends(get_conn)
+) -> str:
+    """Tier para rotas freemium: sem token (ou token inválido) → 'free'. Não levanta 401."""
+    if not token:
+        return "free"
+    sub = decodifica_token(token)
+    if sub is None:
+        return "free"
+    row = conn.execute(
+        text("SELECT plano FROM app.users WHERE id = :i AND ativo"), {"i": int(sub)}
+    ).first()
+    return str(row[0]) if row else "free"
+
+
 @router.get("/me", response_model=UserOut)
 def me(user_id: int = Depends(get_current_user), conn: Connection = Depends(get_conn)) -> UserOut:
     row = conn.execute(
-        text("SELECT id, email, nome FROM app.users WHERE id = :i"), {"i": user_id}
+        text("SELECT id, email, nome, plano FROM app.users WHERE id = :i"), {"i": user_id}
     ).mappings().first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
-    return UserOut(id=row["id"], email=row["email"], nome=row["nome"])
+    return UserOut(id=row["id"], email=row["email"], nome=row["nome"], plano=row["plano"])
