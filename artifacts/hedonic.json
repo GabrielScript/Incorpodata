@@ -1,0 +1,147 @@
+{
+  "modelo": "hedonic-ols-loglog",
+  "versao": 1,
+  "config": {
+    "dataset": "C:\\IncorpoData\\imoveis_jp.json",
+    "seed": 42,
+    "min_apt_por_bairro": 15,
+    "preco_m2_min": 100.0,
+    "preco_m2_max": 20000.0
+  },
+  "dados": {
+    "n_lotes": 398,
+    "n_aptos": 23512,
+    "n_bairros": 47,
+    "sha256_12": "50e29374cd0d"
+  },
+  "coeficientes": {
+    "const": 4.652710438585775,
+    "log_area": -0.09566889974708342,
+    "dist_mar_km": -0.029851057646976355,
+    "dist_manaira_km": -0.07141559872245866,
+    "dist_centro_km": 0.048255652810450765,
+    "log_apt_m2_bairro": 0.43589941727886294
+  },
+  "erros_padrao_cluster_bairro": {
+    "const": 1.8808055703358966,
+    "log_area": 0.04644154021072315,
+    "dist_mar_km": 0.049549403913105146,
+    "dist_manaira_km": 0.0523278665724076,
+    "dist_centro_km": 0.035900677574556845,
+    "log_apt_m2_bairro": 0.213859629511922
+  },
+  "p_valores": {
+    "const": 0.013368976035413626,
+    "log_area": 0.03939992637801383,
+    "dist_mar_km": 0.5468743774351432,
+    "dist_manaira_km": 0.1723247722616006,
+    "dist_centro_km": 0.17890207426729943,
+    "log_apt_m2_bairro": 0.04152492462785454
+  },
+  "r2": 0.436036048161343,
+  "r2_ajustado": 0.42884263040829895,
+  "smearing_duan": 1.1260690165619387,
+  "cv_espacial": {
+    "n_splits": 5,
+    "mdape_modelo": 0.4446952618370523,
+    "mdape_baseline": 0.5506684506063945,
+    "mae_log_modelo": 0.4845798660180115,
+    "mae_log_baseline": 0.6176630200816111,
+    "folds": [
+      {
+        "n_test": 80,
+        "mdape_modelo": 0.6308152470638606,
+        "mdape_baseline": 0.5504625714235757,
+        "mae_log_modelo": 0.5363595918590877,
+        "mae_log_baseline": 0.523312024863905
+      },
+      {
+        "n_test": 80,
+        "mdape_modelo": 0.500373314172372,
+        "mdape_baseline": 0.5969982078853047,
+        "mae_log_modelo": 0.5603545107101084,
+        "mae_log_baseline": 0.8271971674819447
+      },
+      {
+        "n_test": 80,
+        "mdape_modelo": 0.3882645459123489,
+        "mdape_baseline": 0.7405277332346534,
+        "mae_log_modelo": 0.39261675938638974,
+        "mae_log_baseline": 0.6177007190683909
+      },
+      {
+        "n_test": 79,
+        "mdape_modelo": 0.2737187642839927,
+        "mdape_baseline": 0.3649384469696969,
+        "mae_log_modelo": 0.41753828340407734,
+        "mae_log_baseline": 0.537740242143399
+      },
+      {
+        "n_test": 79,
+        "mdape_modelo": 0.43030443775268784,
+        "mdape_baseline": 0.5004152935187417,
+        "mae_log_modelo": 0.5160301847303944,
+        "mae_log_baseline": 0.582364946850416
+      }
+    ]
+  },
+  "apt_m2_bairro": {
+    "Aeroclube": 8857.142857142857,
+    "Altiplano Cabo Branco": 10674.157303370786,
+    "Alto do Céu": 3083.3333333333335,
+    "Alto do Mateus": 3337.0535714285716,
+    "Anatólia": 5535.696428571428,
+    "Bancários": 6345.454545454545,
+    "Bessa": 8920.214285714286,
+    "Brisamar": 9459.45945945946,
+    "Cabo Branco": 15442.477876106195,
+    "Castelo Branco": 5813.953488372093,
+    "Centro": 3605.4387755102043,
+    "Cidade dos Colibris": 4083.3333333333335,
+    "Cristo Redentor": 4578.900709219858,
+    "Cruz das Armas": 4166.625,
+    "Cuiá": 3174.99,
+    "Ernani Sátiro": 2369.5652173913045,
+    "Ernesto Geisel": 3965.5172413793102,
+    "Estados": 7250.0,
+    "Expedicionários": 6250.0,
+    "Funcionários": 3149.8015873015875,
+    "Gramame": 3100.0,
+    "Indústrias": 2744.68085106383,
+    "Ipês": 4810.3448275862065,
+    "Jaguaribe": 4453.488372093023,
+    "Jardim Cidade Universitária": 5555.555555555556,
+    "Jardim Oceania": 11598.470588235294,
+    "Jardim São Paulo": 4800.0,
+    "Jardim Veneza": 3194.6428571428573,
+    "José Américo de Almeida": 4000.0,
+    "João Agripino": 8800.0,
+    "João Paulo II": 3482.1428571428573,
+    "Manaíra": 9085.365853658537,
+    "Mandacaru": 4385.964912280701,
+    "Mangabeira": 4031.666666666667,
+    "Miramar": 9504.13223140496,
+    "Mumbaba": 3515.9574468085107,
+    "Muçumagro": 2906.9767441860463,
+    "Paratibe": 3125.206718346253,
+    "Pedro Gondim": 9494.186770428016,
+    "Planalto Boa Esperança": 3020.8333333333335,
+    "Ponta do Seixas": 16169.019317786286,
+    "Portal do Sol": 5357.142857142857,
+    "Tambauzinho": 7956.989247311828,
+    "Tambaú": 11907.692307692309,
+    "Tambiá": 5438.596491228071,
+    "Torre": 5500.0,
+    "Treze de Maio": 6371.794871794872,
+    "Valentina de Figueiredo": 3700.0,
+    "Água Fria": 6018.518518518518
+  },
+  "apt_m2_global": 9223.895383396077,
+  "features": [
+    "log_area",
+    "dist_mar_km",
+    "dist_manaira_km",
+    "dist_centro_km",
+    "log_apt_m2_bairro"
+  ]
+}
