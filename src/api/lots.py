@@ -3,18 +3,33 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from src.api.auth import get_current_plan, get_optional_plan
 from src.api.db import get_conn
 from src.api.pdf import build_ficha_pdf
-from src.api.schemas import VGV, Listing, LotFicha, Restricao, Viability
+from src.api.plans import limits_for
+from src.api.schemas import (
+    VGV,
+    Listing,
+    LotFicha,
+    Oportunidade,
+    Residual,
+    Restricao,
+    Score,
+    Viability,
+)
 from src.api.viability import (
+    AREA_LOTE_SUSPEITA_M2,
     PrecoStats,
     altura_label,
     escolher_preco_ref,
+    estimar_residual,
     estimar_vgv,
+    geometria_suspeita,
+    incorpo_score,
 )
 
 router = APIRouter(prefix="/api", tags=["lots"])
@@ -117,6 +132,7 @@ def list_lots(
                     "tipo": r["tipo"],
                     "area_m2": _f(r["area_geom_m2"]),
                     "area_projecao_max_m2": _f(r["area_projecao_max_m2"]),
+                    "geometria_suspeita": geometria_suspeita(_f(r["area_geom_m2"])),
                     "sigla": r["sigla"],
                     "a_venda": bool(r["a_venda"]),
                     "preco": _f(r["preco"]),
@@ -203,6 +219,8 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
     # Preferimos a mediana dos comps no RAIO do lote (micro-localização); caímos no bairro
     # quando o raio tem poucos comps. Faixa Q1–Q3 explícita p/ não fingir precisão de ponto.
     vgv = None
+    residual = None
+    score = None
     raio_row = conn.execute(
         text(
             """
@@ -251,8 +269,18 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
             _f(prow["preco_m2_mediana"]), _f(prow["preco_m2_q1"]), _f(prow["preco_m2_q3"]), int(prow["n"])
         )
 
+    # Guarda de plausibilidade: gleba/ZEPA/erro de cadastro NÃO recebe VGV (área × TO% × R$/m²
+    # numa área de hectares cospe bilhões sem sentido). Marca p/ conferência em vez de inventar.
+    suspeita = geometria_suspeita(_f(row["area_geom_m2"]))
+    geometria_aviso = (
+        "Área implausível para lote urbano (gleba/ZEPA ou erro de cadastro) — "
+        "conferir geometria. VGV suprimido."
+        if suspeita
+        else None
+    )
+
     ref = escolher_preco_ref(raio_stats, bairro_stats)
-    if ref is not None and row["area_projecao_max_m2"] is not None:
+    if ref is not None and row["area_projecao_max_m2"] is not None and not suspeita:
         est = estimar_vgv(
             _f(row["area_projecao_max_m2"]), ref.preco_m2,
             preco_m2_q1=ref.q1, preco_m2_q3=ref.q3,
@@ -288,6 +316,58 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
                 ),
             )
 
+            # Valor residual ("quanto pagar"): inverte o VGV pela margem-alvo. Usa o preço
+            # pedido do anúncio (quando casado) p/ o gap de barganha. Mesmas guardas do VGV.
+            res = estimar_residual(est, preco_pedido=listing.preco if listing else None)
+            residual = Residual(
+                custo_obra_m2=res.custo_obra_m2,
+                margem_alvo=res.margem_alvo,
+                custos_indiretos_pct=res.custos_indiretos_pct,
+                residual_por_pavimento=res.residual_por_pavimento,
+                residual_por_pavimento_min=res.residual_por_pavimento_min,
+                residual_por_pavimento_max=res.residual_por_pavimento_max,
+                residual_total=res.residual_total,
+                residual_total_min=res.residual_total_min,
+                residual_total_max=res.residual_total_max,
+                terreno_pct_vgv=res.terreno_pct_vgv,
+                preco_pedido=res.preco_pedido,
+                gap_pct=res.gap_pct,
+                cabe_no_bolso=res.cabe_no_bolso,
+                premissas=(
+                    f"Máximo a pagar p/ margem-alvo de {res.margem_alvo:.0%}. Custo de obra "
+                    f"R$ {res.custo_obra_m2:.0f}/m² (premissa — calibrar ao CUB-PB) + "
+                    f"{res.custos_indiretos_pct:.0%} de custos sobre o VGV. "
+                    f"Método involutivo, preliminar."
+                ),
+            )
+
+            # IncorpoScore: nota 0–100 de atratividade (4 eixos). Reusa VGV+residual+comps já
+            # calculados; a guarda de suspeita/zona já garante que só chega aqui lote ranqueável.
+            sb = incorpo_score(
+                vgv_por_pavimento=est.vgv_por_pavimento,
+                area_lote_m2=_f(row["area_geom_m2"]) or 0.0,
+                preco_m2=ref.preco_m2,
+                n_comps=ref.n,
+                terreno_pct_vgv=res.terreno_pct_vgv,
+                gap_pct=res.gap_pct,
+                q1=ref.q1,
+                q3=ref.q3,
+                em_centro_historico=em_ch,
+                em_barreira=em_bar,
+            )
+            score = Score(
+                total=sb.total,
+                rentabilidade=sb.rentabilidade,
+                aproveitamento=sb.aproveitamento,
+                localizacao=sb.localizacao,
+                confianca=sb.confianca,
+                penalidade_altura=sb.penalidade_altura,
+                nota_metodo=(
+                    "Nota relativa às premissas e às âncoras de JP — preliminar. Ordena "
+                    "oportunidades; não sobrepõe a análise legal/altura nem substitui avaliação."
+                ),
+            )
+
     centroid = [row["lng"], row["lat"]] if row["lng"] is not None else None
     return LotFicha(
         id=row["id"],
@@ -300,25 +380,109 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
         tipo=row["tipo"],
         area_cad_m2=_f(row["area_cad_m2"]),
         area_geom_m2=_f(row["area_geom_m2"]),
+        geometria_suspeita=suspeita,
+        geometria_aviso=geometria_aviso,
         centroid=centroid,
         viability=viability,
         restricao=restricao,
         listing=listing,
         vgv=vgv,
+        residual=residual,
+        score=score,
     )
 
 
 @router.get("/lots/{lot_id}", response_model=LotFicha)
-def get_lot(lot_id: int, conn: Connection = Depends(get_conn)) -> LotFicha:
+def get_lot(
+    lot_id: int,
+    plano: str = Depends(get_optional_plan),
+    conn: Connection = Depends(get_conn),
+) -> LotFicha:
     ficha = _load_ficha(lot_id, conn)
     if ficha is None:
         raise HTTPException(status_code=404, detail="lote não encontrado")
+    # Gate freemium: tier sem vgv_detalhado vê a ficha, mas VGV e residual viram teaser
+    # bloqueado (são as saídas de DECISÃO — "quanto vende" e "quanto pagar").
+    if not limits_for(plano).vgv_detalhado:
+        if ficha.vgv is not None:
+            ficha.vgv = None
+            ficha.vgv_bloqueado = True
+        if ficha.residual is not None:
+            ficha.residual = None
+            ficha.residual_bloqueado = True
+        if ficha.score is not None:
+            ficha.score = None
+            ficha.score_bloqueado = True
     return ficha
 
 
+@router.get("/oportunidades", response_model=list[Oportunidade])
+def list_oportunidades(
+    bairro: str = Query("", description="filtro de bairro (ILIKE); '' = todos"),
+    limit: int = Query(20, ge=1, le=100, description="top-N retornado"),
+    cohort_max: int = Query(120, ge=1, le=300, description="teto de lotes avaliados (custo)"),
+    plano: str = Depends(get_current_plan),
+    conn: Connection = Depends(get_conn),
+) -> list[Oportunidade]:
+    """Ranking das melhores oportunidades do recorte por IncorpoScore. Feature paga.
+
+    Avalia (VGV+residual+score) até `cohort_max` lotes vagos do bairro e devolve os `limit`
+    melhores. Custo O(cohort) em queries — caminho de escala: materializar geo.lote_score.
+    """
+    if not limits_for(plano).vgv_detalhado:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            "ranking de oportunidades disponível nos planos pagos",
+        )
+    cand = conn.execute(
+        text(
+            """
+            SELECT l.id
+            FROM geo.lotes l
+            JOIN geo.lote_zona lz ON lz.lote_id = l.id
+            WHERE (:bairro = '' OR l.bairro ILIKE :bairro)
+              AND l.tipo = 'TERRITORIAL'
+              AND lz.area_projecao_max_m2 IS NOT NULL
+              AND (l.area_geom_m2 IS NULL OR l.area_geom_m2 < :area_suspeita)
+            ORDER BY lz.area_projecao_max_m2 DESC NULLS LAST
+            LIMIT :cohort_max
+            """
+        ),
+        {"bairro": bairro, "area_suspeita": AREA_LOTE_SUSPEITA_M2, "cohort_max": cohort_max},
+    ).all()
+
+    ops: list[Oportunidade] = []
+    for (lot_id,) in cand:
+        ficha = _load_ficha(lot_id, conn)
+        if ficha is None or ficha.score is None or ficha.vgv is None or ficha.residual is None:
+            continue
+        ops.append(
+            Oportunidade(
+                lot_id=ficha.id,
+                logradouro=ficha.logradouro,
+                bairro=ficha.bairro,
+                area_m2=ficha.area_geom_m2,
+                vgv_total=ficha.vgv.vgv_total,
+                residual_total=ficha.residual.residual_total,
+                terreno_pct_vgv=ficha.residual.terreno_pct_vgv,
+                gap_pct=ficha.residual.gap_pct,
+                cabe_no_bolso=ficha.residual.cabe_no_bolso,
+                score=ficha.score,
+            )
+        )
+    ops.sort(key=lambda o: o.score.total, reverse=True)
+    return ops[:limit]
+
+
 @router.get("/lots/{lot_id}/pdf")
-def get_lot_pdf(lot_id: int, conn: Connection = Depends(get_conn)) -> Response:
-    """Ficha do lote em PDF (com VGV) — levável ao comitê."""
+def get_lot_pdf(
+    lot_id: int,
+    plano: str = Depends(get_current_plan),
+    conn: Connection = Depends(get_conn),
+) -> Response:
+    """Ficha do lote em PDF (com VGV) — levável ao comitê. Feature paga."""
+    if limits_for(plano).pdf_mes == 0:
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "ficha em PDF disponível nos planos pagos")
     ficha = _load_ficha(lot_id, conn)
     if ficha is None:
         raise HTTPException(status_code=404, detail="lote não encontrado")

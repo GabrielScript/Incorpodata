@@ -62,6 +62,35 @@ class VGV(BaseModel):
     premissas: str
 
 
+class Residual(BaseModel):
+    """Valor residual do terreno (involutivo): o máximo a pagar p/ a margem-alvo."""
+    custo_obra_m2: float           # premissa (calibrar ao CUB-PB) — a mais sensível
+    margem_alvo: float             # lucro mínimo sobre VGV exigido do negócio
+    custos_indiretos_pct: float    # impostos + comercialização + indiretos (% do VGV)
+    residual_por_pavimento: float  # headline robusto (independe da premissa de altura)
+    residual_por_pavimento_min: float | None = None  # faixa Q1–Q3 (pode cruzar o zero)
+    residual_por_pavimento_max: float | None = None
+    residual_total: float          # sob a premissa de pavimentos
+    residual_total_min: float | None = None
+    residual_total_max: float | None = None
+    terreno_pct_vgv: float | None = None  # residual ÷ VGV (régua de bolso 15–20%)
+    preco_pedido: float | None = None     # do anúncio casado, quando existe
+    gap_pct: float | None = None          # (residual − pedido) ÷ residual: barganha
+    cabe_no_bolso: bool | None = None
+    premissas: str
+
+
+class Score(BaseModel):
+    """IncorpoScore 0–100 + decomposição (eixos 0–10). Relativo às premissas, preliminar."""
+    total: float
+    rentabilidade: float
+    aproveitamento: float
+    localizacao: float
+    confianca: float
+    penalidade_altura: bool = False
+    nota_metodo: str
+
+
 class LotFicha(BaseModel):
     id: int
     inscricao: str | None = None
@@ -73,11 +102,35 @@ class LotFicha(BaseModel):
     tipo: str | None = None
     area_cad_m2: float | None = None
     area_geom_m2: float | None = None
+    # Guarda de plausibilidade: área grande demais p/ lote urbano (gleba/ZEPA/erro). VGV suprimido.
+    geometria_suspeita: bool = False
+    geometria_aviso: str | None = None
     centroid: list[float] | None = None  # [lng, lat] WGS84, p/ centralizar o mapa
     viability: Viability | None = None
     restricao: Restricao
     listing: Listing | None = None
     vgv: VGV | None = None
+    # Tier free: VGV existe mas é suprimido como teaser → front mostra card "assine p/ ver".
+    vgv_bloqueado: bool = False
+    residual: Residual | None = None
+    # Tier free: residual (decisão "quanto pagar") suprimido como teaser, igual ao VGV.
+    residual_bloqueado: bool = False
+    score: Score | None = None
+    score_bloqueado: bool = False
+
+
+class Oportunidade(BaseModel):
+    """Linha do ranking de oportunidades (/api/oportunidades) — ficha-lite ordenável."""
+    lot_id: int
+    logradouro: str | None = None
+    bairro: str | None = None
+    area_m2: float | None = None
+    vgv_total: float
+    residual_total: float
+    terreno_pct_vgv: float | None = None
+    gap_pct: float | None = None
+    cabe_no_bolso: bool | None = None
+    score: Score
 
 
 # ───────── auth ─────────

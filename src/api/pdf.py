@@ -99,6 +99,16 @@ def build_ficha_pdf(ficha: LotFicha) -> bytes:
     flow.append(Spacer(1, 6))
     flow.append(HRFlowable(width="100%", thickness=1, color=_LINE))
 
+    # ───── Geometria suspeita: avisa e suprime VGV (gleba/ZEPA/erro de cadastro) ─────
+    if ficha.geometria_suspeita:
+        flow.append(Paragraph("⚠ Geometria suspeita", s["section"]))
+        flow.append(Paragraph(
+            ficha.geometria_aviso
+            or "Área implausível para lote urbano — conferir geometria. VGV suprimido.",
+            s["vgvk"],
+        ))
+        flow.append(Spacer(1, 8))
+
     # ───── VGV em destaque ─────
     if ficha.vgv is not None:
         v = ficha.vgv
@@ -142,6 +152,46 @@ def build_ficha_pdf(ficha: LotFicha) -> bytes:
         flow.append(_kv_table(vgv_rows))
         flow.append(Paragraph(f"Premissas: {v.premissas}", s["note"]))
 
+    # ───── Valor residual (quanto pagar) em destaque ─────
+    if ficha.residual is not None:
+        r = ficha.residual
+        flow.append(Paragraph("Quanto pagar (valor residual)", s["section"]))
+        if r.residual_total > 0:
+            big = f"até {_brl(r.residual_total)}"
+            sub = f"máximo p/ margem-alvo de {_pct(r.margem_alvo * 100)}"
+            if r.terreno_pct_vgv is not None:
+                sub += f"  ·  {_pct(r.terreno_pct_vgv * 100)} do VGV"
+        else:
+            big = "inviável às premissas"
+            sub = "custo de obra + margem-alvo superam o VGV"
+        head = Table([[Paragraph(big, s["vgvbig"])], [Paragraph(sub, s["vgvk"])]],
+                     colWidths=[160 * mm])
+        head.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
+            ("BOX", (0, 0), (-1, -1), 0.5, _LINE),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        flow.append(head)
+        flow.append(Spacer(1, 4))
+        res_rows = [("Máximo por pavimento", _brl(r.residual_por_pavimento))]
+        if r.residual_total_min is not None and r.residual_total_max is not None:
+            res_rows.append((
+                "Faixa do residual (Q1–Q3)",
+                f"{_brl(r.residual_total_min)} – {_brl(r.residual_total_max)}",
+            ))
+        res_rows.append(("Custo de obra (premissa)", f"{_brl(r.custo_obra_m2)}/m²"))
+        if r.gap_pct is not None:
+            estado = "cabe no bolso" if r.cabe_no_bolso else "acima do máximo"
+            res_rows.append((
+                "Barganha vs preço pedido",
+                f"{estado}  ·  {_pct(abs(r.gap_pct) * 100)} "
+                + ("de folga" if r.cabe_no_bolso else "acima"),
+            ))
+        flow.append(_kv_table(res_rows))
+        flow.append(Paragraph(f"Premissas: {r.premissas}", s["note"]))
+
     # ───── Envelope LUOS ─────
     if ficha.viability is not None:
         vb = ficha.viability
@@ -176,8 +226,9 @@ def build_ficha_pdf(ficha: LotFicha) -> bytes:
     flow.append(Spacer(1, 10))
     flow.append(HRFlowable(width="100%", thickness=0.5, color=_LINE))
     flow.append(Paragraph(
-        "IncorpoData · viabilidade de terrenos · João Pessoa/PB. VGV preliminar — "
-        "premissas de pavimentos/eficiência ajustáveis pelo incorporador. Não substitui projeto.",
+        "IncorpoData · viabilidade de terrenos · João Pessoa/PB. VGV e valor residual "
+        "preliminares (método involutivo) — premissas de pavimentos/eficiência/custo de obra "
+        "ajustáveis pelo incorporador. Não substitui projeto nem avaliação.",
         s["foot"],
     ))
 
