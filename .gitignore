@@ -26,3 +26,18 @@ node_modules/
 # Segredos
 *.key
 secrets/
+Password.txt
+
+# Dados brutos grandes (>50MB — GitHub rejeita; ficam locais)
+imoveis_jp.json
+bancarios.json
+
+# Documentos pessoais / material de referência solto na raiz
+*.pdf
+Sirio_Liban*.txt
+*.zip
+
+# Repos/ferramentas externas clonadas (não fazem parte do app)
+agent-skills/
+geopandas/
+maps/
