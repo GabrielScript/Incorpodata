@@ -123,3 +123,51 @@ CREATE TABLE IF NOT EXISTS market.anuncio_lote (
   score      numeric,
   PRIMARY KEY (anuncio_id, lote_id)
 );
+
+-- ───────────────────────── Comps de mercado (referência de preço, base do VGV) ─────────────────────────
+-- Distinto de market.anuncios: comps são a NUVEM de preços de venda (apto/casa/lote) que
+-- vira R$/m² por bairro. Não casamos comp→lote nem expomos contato (não é gatilho de demanda,
+-- é benchmark estatístico). Tabela fiel ao raspado; o saneamento de outliers vive na view.
+CREATE TABLE IF NOT EXISTS market.comps (
+  id           bigserial PRIMARY KEY,
+  source       text NOT NULL,           -- vivareal | ...
+  source_id    text NOT NULL,           -- id do anúncio na origem
+  tipo         text,                    -- Apartamento | Casa | Lote/Terreno | ...
+  business     text DEFAULT 'SALE',
+  preco        numeric,
+  area_m2      numeric,
+  preco_m2     numeric GENERATED ALWAYS AS
+                 (CASE WHEN area_m2 > 0 THEN preco / area_m2 END) STORED,
+  quartos      int,
+  vagas        int,
+  bairro       text,
+  lat          double precision,
+  lon          double precision,
+  geom         geometry(Point, 31985),  -- p/ mediana espacial futura (raio do lote)
+  scraped_at   timestamptz,
+  carregado_em timestamptz DEFAULT now(),
+  UNIQUE (source, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_comps_bairro ON market.comps (bairro);
+CREATE INDEX IF NOT EXISTS idx_comps_tipo   ON market.comps (tipo);
+CREATE INDEX IF NOT EXISTS idx_comps_geom   ON market.comps USING GIST (geom);
+
+-- Geocodificação de comps sem coordenada (backfill Nominatim — src/scrapers/geocode_comps).
+-- ALTER IF NOT EXISTS: schema.sql é idempotente e também atualiza bancos já existentes.
+ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS endereco  text;  -- street do anúncio (entrada do geocoder)
+ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS geo_fonte text;  -- 'fonte' (scraper) | 'nominatim'
+
+-- R$/m² por bairro e tipo: mediana + quartis + N. Outliers saneados (faixa plausível de
+-- venda) para a mediana não ser puxada por erro de digitação/área. É o número que o VGV usa.
+CREATE OR REPLACE VIEW market.preco_m2_bairro AS
+SELECT
+  bairro,
+  tipo,
+  count(*)                                               AS n,
+  percentile_cont(0.5)  WITHIN GROUP (ORDER BY preco_m2) AS preco_m2_mediana,
+  percentile_cont(0.25) WITHIN GROUP (ORDER BY preco_m2) AS preco_m2_q1,
+  percentile_cont(0.75) WITHIN GROUP (ORDER BY preco_m2) AS preco_m2_q3
+FROM market.comps
+WHERE business = 'SALE'
+  AND preco_m2 BETWEEN 800 AND 30000
+GROUP BY bairro, tipo;
