@@ -429,7 +429,9 @@ def list_oportunidades(
     bairro: str = Query("", description="filtro de bairro (ILIKE); '' = todos"),
     limit: int = Query(20, ge=1, le=100, description="top-N retornado"),
     cohort_max: int = Query(120, ge=1, le=300, description="teto de lotes avaliados (custo)"),
-    plano: str = Depends(get_current_plan),
+    # Freemium, não exige token: com PLANS_ENFORCED desligado (demo) o anônimo enxerga tudo;
+    # ligado, anônimo cai em free e leva 402 no gate abaixo — a regra de negócio fica intacta.
+    plano: str = Depends(get_optional_plan),
     conn: Connection = Depends(get_conn),
 ) -> list[Oportunidade]:
     """Ranking das melhores oportunidades do recorte por VALOR RESIDUAL. Feature paga.
@@ -488,7 +490,7 @@ def list_oportunidades(
 @router.get("/lots/{lot_id}/pdf")
 def get_lot_pdf(
     lot_id: int,
-    plano: str = Depends(get_current_plan),
+    plano: str = Depends(get_optional_plan),  # freemium: ver nota em list_oportunidades
     conn: Connection = Depends(get_conn),
 ) -> Response:
     """Ficha do lote em PDF (com VGV) — levável ao comitê. Feature paga."""
