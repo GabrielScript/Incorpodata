@@ -17,7 +17,8 @@ from sqlalchemy import text
 from src.api.security import cria_token, hash_senha
 from src.db.database import get_engine
 
-DEV_EMAIL = "dev@incorpodata.local"
+# .com.br e não .local: EmailStr (UserOut) rejeita TLDs reservados → /api/auth/me dava 500
+DEV_EMAIL = "dev@incorpodata.com.br"
 DEV_SENHA = "dev-incorpodata"
 
 
