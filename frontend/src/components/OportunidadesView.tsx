@@ -1,6 +1,5 @@
 import { useAsync } from '../hooks/useApi'
 import { listOportunidades } from '../api/client'
-import { ScoreBars } from './LotFichaPanel'
 import type { Oportunidade } from '../api/types'
 
 const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
@@ -14,7 +13,7 @@ interface Props {
   onOpenLot: (id: number) => void
 }
 
-/** Ranking das melhores oportunidades do recorte por IncorpoScore (feature paga). */
+/** Ranking das melhores oportunidades do recorte por valor residual (feature paga). */
 export function OportunidadesView({ bairro, authed, onRequireAuth, onOpenLot }: Props) {
   const ops = useAsync(
     () => (authed ? listOportunidades(bairro, 20) : Promise.resolve<Oportunidade[]>([])),
@@ -38,7 +37,7 @@ export function OportunidadesView({ bairro, authed, onRequireAuth, onOpenLot }: 
     <div className="oportunidades">
       <div className="op-head">
         <h2>Melhores oportunidades {bairro ? `· ${bairro}` : '· todos os bairros'}</h2>
-        <span className="op-sub">ordenado por IncorpoScore · {ops.data?.length ?? 0} lotes</span>
+        <span className="op-sub">ordenado por valor residual (quanto vale pagar) · {ops.data?.length ?? 0} lotes</span>
       </div>
       {ops.loading && <div className="state">Avaliando lotes…</div>}
       {ops.error && <div className="state error">Erro: {ops.error.message}</div>}
@@ -52,15 +51,16 @@ export function OportunidadesView({ bairro, authed, onRequireAuth, onOpenLot }: 
             <div className="op-main">
               <div className="op-top">
                 <strong>{o.logradouro ?? `Lote ${o.lot_id}`}</strong>
-                <span className="op-score">
-                  {nf0.format(o.score.total)}
-                  <small>/100</small>
+                <span className={`op-residual${o.residual_total > 0 ? '' : ' inviavel'}`}>
+                  {o.residual_total > 0 ? brl.format(o.residual_total) : 'inviável'}
                 </span>
               </div>
               <div className="op-meta">
-                {o.bairro ?? '—'} · {o.area_m2 != null ? `${nf0.format(o.area_m2)} m²` : '—'} · pagar até{' '}
-                <strong>{o.residual_total > 0 ? brl.format(o.residual_total) : 'inviável'}</strong>
-                {o.terreno_pct_vgv != null && o.residual_total > 0 && <> ({pct(o.terreno_pct_vgv * 100)} do VGV)</>}
+                {o.bairro ?? '—'} · {o.area_m2 != null ? `${nf0.format(o.area_m2)} m²` : '—'} · VGV{' '}
+                <strong>{brl.format(o.vgv_total)}</strong>
+                {o.terreno_pct_vgv != null && o.residual_total > 0 && (
+                  <> · terreno {pct(o.terreno_pct_vgv * 100)} do VGV</>
+                )}
                 {o.gap_pct != null && (
                   <span className={`op-gap ${o.cabe_no_bolso ? 'ok' : 'caro'}`}>
                     {' '}
@@ -68,7 +68,6 @@ export function OportunidadesView({ bairro, authed, onRequireAuth, onOpenLot }: 
                   </span>
                 )}
               </div>
-              <ScoreBars score={o.score} />
             </div>
           </li>
         ))}

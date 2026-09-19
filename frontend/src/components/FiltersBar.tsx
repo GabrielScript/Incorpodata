@@ -62,14 +62,6 @@ export function FiltersBar({ bairros, value, onChange }: Props) {
             <option value="proj_desc">maior → menor</option>
             <option value="proj_asc">menor → maior</option>
           </optgroup>
-          <optgroup label="Preço">
-            <option value="preco_asc">menor → maior</option>
-            <option value="preco_desc">maior → menor</option>
-          </optgroup>
-          <optgroup label="Preço / m²">
-            <option value="preco_m2_asc">menor → maior</option>
-            <option value="preco_m2_desc">maior → menor</option>
-          </optgroup>
         </select>
       </label>
 
@@ -80,14 +72,6 @@ export function FiltersBar({ bairros, value, onChange }: Props) {
           onChange={(e) => set({ onlyVacant: e.target.checked })}
         />
         Só vagos
-      </label>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={value.aVenda}
-          onChange={(e) => set({ aVenda: e.target.checked })}
-        />
-        À venda
       </label>
     </div>
   )

@@ -46,7 +46,7 @@ const FILL_MAP: ExpressionSpecification = [
   'case',
   ['boolean', ['feature-state', 'selected'], false],
   0.6,
-  ['case', ['get', 'a_venda'], 0.45, 0.22],
+  0.22,
 ]
 const FILL_SAT: ExpressionSpecification = [
   'case',
@@ -112,7 +112,7 @@ export function MapView({ data, selectedId, onSelect }: Props) {
         type: 'fill',
         source: 'lots',
         paint: {
-          'fill-color': ['case', ['get', 'a_venda'], '#0f766e', '#7c878d'],
+          'fill-color': '#7c878d',
           'fill-opacity': FILL_MAP,
         },
       })
@@ -202,9 +202,6 @@ export function MapView({ data, selectedId, onSelect }: Props) {
       <div className="legend">
         <span>
           <i className="sw vago" /> Vago
-        </span>
-        <span>
-          <i className="sw venda" /> À venda
         </span>
       </div>
     </div>

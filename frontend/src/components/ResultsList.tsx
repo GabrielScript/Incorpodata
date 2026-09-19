@@ -5,7 +5,6 @@ import { SORT_LABELS, type LotSort } from '../api/client'
 
 const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
 const fmtM2 = (v: number) => `${nf0.format(v)} m²`
-const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 
 interface Props {
   data: FeatureCollection | null
@@ -61,16 +60,9 @@ const ResultRow = memo(function ResultRow({
         <span className="row-sub">
           {p.area_m2 != null && <>{fmtM2(p.area_m2)} · </>}
           {p.sigla ?? 's/ zona'}
-          {p.a_venda && <span className="tag-venda">à venda</span>}
         </span>
         {p.area_projecao_max_m2 != null && (
           <span className="row-proj">cabe ~{fmtM2(p.area_projecao_max_m2)} no térreo</span>
-        )}
-        {p.preco != null && (
-          <span className="row-price">
-            {brl.format(p.preco)}
-            {p.preco_m2 != null && <span className="row-price-m2"> · {brl.format(p.preco_m2)}/m²</span>}
-          </span>
         )}
       </button>
     </li>

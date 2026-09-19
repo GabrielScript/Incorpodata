@@ -62,7 +62,6 @@ export type LotSort =
 export interface LotFilters {
   bairro: string // '' = todos os bairros
   onlyVacant: boolean
-  aVenda: boolean
   areaMin: string // texto do input; vazio = sem limite
   areaMax: string
   sort: LotSort
@@ -87,7 +86,6 @@ export function listLots(f: LotFilters): Promise<FeatureCollection> {
   const p = new URLSearchParams({
     bairro: f.bairro,
     only_vacant: String(f.onlyVacant),
-    a_venda: String(f.aVenda),
     sort: f.sort,
   })
   if (f.areaMin.trim()) p.set('area_min', f.areaMin.trim())
@@ -97,7 +95,7 @@ export function listLots(f: LotFilters): Promise<FeatureCollection> {
 
 export const getLot = (id: number) => json<LotFicha>(`${BASE}/lots/${id}`)
 
-// Ranking de oportunidades por IncorpoScore (feature paga → request autenticada).
+// Ranking de oportunidades por valor residual (feature paga → request autenticada).
 export const listOportunidades = (bairro: string, limit = 20) =>
   req<Oportunidade[]>(`${BASE}/oportunidades?bairro=${encodeURIComponent(bairro)}&limit=${limit}`)
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import text
@@ -33,6 +34,11 @@ from src.api.viability import (
 )
 
 router = APIRouter(prefix="/api", tags=["lots"])
+
+# Camada "à venda" (market.anuncios) DESLIGADA por default: sem scraper agendado o anúncio
+# envelhece e um lote "à venda" já vendido queima credibilidade. Schema, scraper e casamento
+# continuam existindo; religar = ANUNCIOS_ATIVOS=1 quando houver frescor garantido.
+ANUNCIOS_ATIVOS = os.getenv("ANUNCIOS_ATIVOS", "0").strip().lower() in {"1", "true", "sim"}
 
 # Raio (m, SRID 31985) p/ a mediana de R$/m² na MICRO-localização do lote. Mediana do bairro
 # inteiro mascara variância intra-bairro (frente-mar × fundo); só caímos nela se o raio for ralo.
@@ -134,9 +140,9 @@ def list_lots(
                     "area_projecao_max_m2": _f(r["area_projecao_max_m2"]),
                     "geometria_suspeita": geometria_suspeita(_f(r["area_geom_m2"])),
                     "sigla": r["sigla"],
-                    "a_venda": bool(r["a_venda"]),
-                    "preco": _f(r["preco"]),
-                    "preco_m2": _f(r["preco_m2"]),
+                    "a_venda": bool(r["a_venda"]) and ANUNCIOS_ATIVOS,
+                    "preco": _f(r["preco"]) if ANUNCIOS_ATIVOS else None,
+                    "preco_m2": _f(r["preco_m2"]) if ANUNCIOS_ATIVOS else None,
                 },
             }
         )
@@ -166,19 +172,21 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
     if row is None:
         return None
 
-    lrow = conn.execute(
-        text(
-            """
-            SELECT a.id AS anuncio_id, a.fonte, a.preco, a.area_anunc_m2, a.preco_m2
-            FROM market.anuncio_lote al
-            JOIN market.anuncios a ON a.id = al.anuncio_id AND a.ativo
-            WHERE al.lote_id = :id
-            ORDER BY al.score DESC NULLS LAST
-            LIMIT 1
-            """
-        ),
-        {"id": lot_id},
-    ).mappings().first()
+    lrow = None
+    if ANUNCIOS_ATIVOS:
+        lrow = conn.execute(
+            text(
+                """
+                SELECT a.id AS anuncio_id, a.fonte, a.preco, a.area_anunc_m2, a.preco_m2
+                FROM market.anuncio_lote al
+                JOIN market.anuncios a ON a.id = al.anuncio_id AND a.ativo
+                WHERE al.lote_id = :id
+                ORDER BY al.score DESC NULLS LAST
+                LIMIT 1
+                """
+            ),
+            {"id": lot_id},
+        ).mappings().first()
 
     viability = None
     if row["sigla"] is not None:
@@ -424,9 +432,12 @@ def list_oportunidades(
     plano: str = Depends(get_current_plan),
     conn: Connection = Depends(get_conn),
 ) -> list[Oportunidade]:
-    """Ranking das melhores oportunidades do recorte por IncorpoScore. Feature paga.
+    """Ranking das melhores oportunidades do recorte por VALOR RESIDUAL. Feature paga.
 
-    Avalia (VGV+residual+score) até `cohort_max` lotes vagos do bairro e devolve os `limit`
+    Ordena por `residual_total` (quanto vale pagar pelo terreno) — critério transparente que
+    o incorporador confere de cabeça. O IncorpoScore segue calculado e devolvido, mas não
+    ordena: sem anúncio casado, 3 dos 4 eixos são quase só o preço/m² do bairro relido.
+    Avalia (VGV+residual) até `cohort_max` lotes vagos do bairro e devolve os `limit`
     melhores. Custo O(cohort) em queries — caminho de escala: materializar geo.lote_score.
     """
     if not limits_for(plano).vgv_detalhado:
@@ -470,7 +481,7 @@ def list_oportunidades(
                 score=ficha.score,
             )
         )
-    ops.sort(key=lambda o: o.score.total, reverse=True)
+    ops.sort(key=lambda o: o.residual_total, reverse=True)
     return ops[:limit]
 
 

@@ -20,6 +20,4 @@ export const GLOSSARY: Record<string, string> = {
   VGV: 'Valor Geral de Vendas: receita potencial total das unidades = área privativa × R$/m² de venda.',
   'Valor residual':
     'Quanto vale pagar pelo terreno: o que sobra do VGV depois de obra, impostos, comercialização, indiretos e a margem-alvo do incorporador (método involutivo).',
-  IncorpoScore:
-    'Nota 0–100 de atratividade do lote, de 4 eixos: rentabilidade, aproveitamento, localização e confiança. Relativa às premissas e preliminar — ordena oportunidades, não substitui análise.',
 }

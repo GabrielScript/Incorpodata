@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { LotFicha, Score } from '../api/types'
+import type { LotFicha } from '../api/types'
 import { addLandbank, lotPdfUrl } from '../api/client'
 import { GLOSSARY } from '../glossary'
 
 const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
-const nf1 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 const m2 = (v?: number | null) => (v == null ? '—' : `${nf0.format(v)} m²`)
 const pct = (v?: number | null) => (v == null ? '—' : `${nf0.format(v)}%`)
@@ -20,29 +19,6 @@ function Term({ k, label }: { k: string; label?: string }) {
     </abbr>
   ) : (
     <>{text}</>
-  )
-}
-
-/** Decomposição do IncorpoScore em 4 barras (cada eixo 0–10). Reusada no ranking. */
-export function ScoreBars({ score }: { score: Score }) {
-  const eixos: Array<[string, number]> = [
-    ['Rentabilidade', score.rentabilidade],
-    ['Aproveitamento', score.aproveitamento],
-    ['Localização', score.localizacao],
-    ['Confiança', score.confianca],
-  ]
-  return (
-    <div className="score-bars">
-      {eixos.map(([label, nota]) => (
-        <div className="score-row" key={label}>
-          <span className="score-k">{label}</span>
-          <span className="score-bar">
-            <span style={{ width: `${nota * 10}%` }} />
-          </span>
-          <span className="score-v">{nf1.format(nota)}</span>
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -84,7 +60,6 @@ function Resumo({ lot }: { lot: LotFicha }) {
   const proj = v?.area_projecao_max_m2
   const vgv = lot.vgv
   const residual = lot.residual
-  const score = lot.score
   const [save, setSave] = useState<SaveState>('idle')
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
@@ -200,22 +175,6 @@ function Resumo({ lot }: { lot: LotFicha }) {
         </div>
       )}
 
-      {score && (
-        <div className="score">
-          <div className="score-h">
-            <Term k="IncorpoScore" label="IncorpoScore" />
-            <span className="score-total">
-              {nf0.format(score.total)}
-              <small>/100</small>
-            </span>
-          </div>
-          <ScoreBars score={score} />
-          {score.penalidade_altura && (
-            <div className="score-pen">▼ penalizado: altura restrita (IPHAEP/barreira)</div>
-          )}
-        </div>
-      )}
-
       <div className="cards">
         <div className="card">
           <div className="k">
@@ -227,9 +186,13 @@ function Resumo({ lot }: { lot: LotFicha }) {
           </div>
         </div>
         <div className="card">
-          <div className="k">À venda</div>
-          <div className="big">{lot.listing?.preco != null ? brl.format(lot.listing.preco) : '—'}</div>
-          <div className="k">{lot.listing ? lot.listing.fonte : 'sem anúncio'}</div>
+          <div className="k">
+            <Term k="TAP" label="Área permeável mín." />
+          </div>
+          <div className="big">{m2(v?.area_permeavel_min_m2)}</div>
+          <div className="k">
+            <Term k="TAP" label="Taxa permeável" /> {pct(v?.tap_min_pct)}
+          </div>
         </div>
       </div>
 
@@ -350,14 +313,6 @@ function Completo({ lot }: { lot: LotFicha }) {
         </Section>
       )}
 
-      <Section title="Mercado">
-        <Row
-          k="À venda"
-          val={lot.listing?.preco != null ? `${brl.format(lot.listing.preco)} · ${lot.listing.fonte}` : '—'}
-        />
-        <Row term="R$/m² terreno" k="R$/m² terreno" val={lot.listing?.preco_m2 != null ? brl.format(lot.listing.preco_m2) : '—'} />
-        <Row k="Melhor uso" val="▸ fase 2" />
-      </Section>
     </div>
   )
 }

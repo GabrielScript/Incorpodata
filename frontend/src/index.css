@@ -911,6 +911,85 @@ button {
   padding: 2px;
 }
 
+/* ───────── Oportunidades (home): ranking por valor residual ───────── */
+.oportunidades {
+  overflow: auto;
+  padding: 0 0 24px;
+}
+.op-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 18px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.op-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.op-sub {
+  color: var(--muted);
+  font-size: 12px;
+}
+.op-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px;
+  display: grid;
+  gap: 8px;
+}
+.op-card {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.op-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.op-rank {
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+.op-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.op-residual {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.op-residual.inviavel {
+  color: var(--muted);
+  font-weight: 600;
+}
+.op-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.op-gap.ok {
+  color: var(--accent-ink);
+}
+.op-gap.caro {
+  color: var(--danger);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
