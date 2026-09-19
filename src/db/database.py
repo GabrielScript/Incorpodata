@@ -15,7 +15,10 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def get_engine() -> Engine:
     url = os.getenv("DATABASE_URL", DEFAULT_URL)
-    return create_engine(url, future=True)
+    # values_plus_batch: executemany de SQL textual (upsert de comps) vai em páginas via
+    # execute_batch em vez de 1 round-trip por linha — contra Neon remoto, 28k linhas
+    # caíam de >1h para minutos. Sem efeito em execute() simples da API.
+    return create_engine(url, future=True, executemany_mode="values_plus_batch")
 
 
 def init_db(engine: Engine | None = None) -> None:
