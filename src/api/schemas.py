@@ -102,7 +102,7 @@ class LotFicha(BaseModel):
     tipo: str | None = None
     area_cad_m2: float | None = None
     area_geom_m2: float | None = None
-    # Guarda de plausibilidade: área grande demais p/ lote urbano (gleba/ZEPA/erro). VGV suprimido.
+    # Guarda de plausibilidade: área grande demais p/ lote urbano (gleba/ZEPA). VGV suprimido.
     geometria_suspeita: bool = False
     geometria_aviso: str | None = None
     centroid: list[float] | None = None  # [lng, lat] WGS84, p/ centralizar o mapa

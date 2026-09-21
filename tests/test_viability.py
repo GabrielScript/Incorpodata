@@ -13,6 +13,7 @@ from src.api.viability import (
     SCORE_TERRENO_PCT_FULL,
     PrecoStats,
     altura_label,
+    aviso_area_grande,
     escolher_preco_ref,
     estimar_residual,
     estimar_vgv,
@@ -144,7 +145,7 @@ def test_vgv_sem_quartis_faixa_none():
     assert v.vgv_total_max is None
 
 
-# ───────── guarda de plausibilidade: gleba/erro de cadastro não vira VGV ─────────
+# ───────── guarda de plausibilidade: gleba/ZEPA não vira VGV ─────────
 def test_geometria_suspeita_pega_gleba():
     assert geometria_suspeita(5_140_263) is True   # maior "lote" real de JP (5,1 km²)
     assert geometria_suspeita(AREA_LOTE_SUSPEITA_M2 + 1) is True
@@ -158,6 +159,41 @@ def test_geometria_ok_lote_urbano():
 
 def test_geometria_suspeita_none():
     assert geometria_suspeita(None) is False         # sem geom → não bloqueia
+
+
+# ───────── aviso da guarda: ZEPA × gleba (nunca sugere erro de cadastro) ─────────
+def test_aviso_none_para_lote_urbano():
+    assert aviso_area_grande(223, "ZR1") is None
+    assert aviso_area_grande(AREA_LOTE_SUSPEITA_M2, "ZEPA2") is None  # limiar exclusivo
+    assert aviso_area_grande(None, None) is None
+
+
+def test_aviso_zepa1_cita_plano_de_manejo():
+    a = aviso_area_grande(1_876_650, "ZEPA1")
+    assert "Proteção Ambiental (ZEPA1)" in a
+    assert "187,7 ha" in a
+    assert "plano de manejo" in a
+
+
+def test_aviso_zepa2_cita_licenciamento():
+    a = aviso_area_grande(423_314, "ZEPA-2")  # sigla com hífen (CSV da LUOS) também casa
+    assert "(ZEPA2)" in a
+    assert "licenciamento ambiental" in a
+    assert "plano de manejo" not in a
+
+
+def test_aviso_gleba_fora_de_zepa():
+    a = aviso_area_grande(50_000, "ZH2")
+    assert a.startswith("Gleba de 5,0 ha")
+    assert "parcelamento" in a
+    assert aviso_area_grande(50_000, None).startswith("Gleba")  # sem zona → gleba
+
+
+def test_aviso_nunca_sugere_erro_de_cadastro():
+    for sigla in ("ZEPA1", "ZEPA2", "ZH2", None):
+        a = aviso_area_grande(100_000, sigla)
+        assert "erro de cadastro" not in a
+        assert "VGV" in a
 
 
 # ───────── escolha do preço de referência: raio do lote × fallback bairro ─────────

@@ -26,6 +26,7 @@ from src.api.viability import (
     AREA_LOTE_SUSPEITA_M2,
     PrecoStats,
     altura_label,
+    aviso_area_grande,
     escolher_preco_ref,
     estimar_residual,
     estimar_vgv,
@@ -277,15 +278,10 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
             _f(prow["preco_m2_mediana"]), _f(prow["preco_m2_q1"]), _f(prow["preco_m2_q3"]), int(prow["n"])
         )
 
-    # Guarda de plausibilidade: gleba/ZEPA/erro de cadastro NÃO recebe VGV (área × TO% × R$/m²
-    # numa área de hectares cospe bilhões sem sentido). Marca p/ conferência em vez de inventar.
+    # Guarda de plausibilidade: gleba/ZEPA NÃO recebe VGV (área × TO% × R$/m² numa área de
+    # hectares cospe bilhões sem sentido). O aviso diz por quê, conforme a zona.
     suspeita = geometria_suspeita(_f(row["area_geom_m2"]))
-    geometria_aviso = (
-        "Área implausível para lote urbano (gleba/ZEPA ou erro de cadastro) — "
-        "conferir geometria. VGV suprimido."
-        if suspeita
-        else None
-    )
+    geometria_aviso = aviso_area_grande(_f(row["area_geom_m2"]), row["sigla"])
 
     ref = escolher_preco_ref(raio_stats, bairro_stats)
     if ref is not None and row["area_projecao_max_m2"] is not None and not suspeita:

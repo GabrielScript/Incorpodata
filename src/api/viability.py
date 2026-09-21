@@ -6,6 +6,7 @@ barreira do Cabo Branco), não vem da zona. Aqui traduzimos as flags por lote
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 # Premissas do estudo de massa (o incorporador ajusta; aqui são defaults transparentes).
@@ -26,17 +27,48 @@ INDIRETOS_PCT_PADRAO = 0.05        # projetos, legalização, incorporação, ad
 # ficha; o incorporador calibra ao seu caderno de obra. Sanity: terreno/VGV ~15-20% em lote médio.
 CUSTO_OBRA_M2_PADRAO = 2700.0      # R$/m² de área construída (médio padrão verticalizado JP)
 
-# Guarda de plausibilidade: acima disto o "lote" é gleba/ZEPA/área institucional (ou erro de
-# cadastro), não lote urbano edificável. Distribuição real de João Pessoa (186 mil lotes):
-# mediana ~223 m², p99 ~5.000 m², max 5,14 milhões m². 30.000 m² isola a cauda (~0,17% dos
-# lotes) sem pegar lote grande legítimo. VGV nesses é suprimido — área × TO% × R$/m² numa
-# gleba de hectares cospe bilhões sem sentido de incorporação.
+# Guarda de plausibilidade: acima disto o "lote" é gleba/ZEPA/área institucional, não lote
+# urbano edificável. Distribuição real de João Pessoa (186 mil lotes): mediana ~223 m², p99
+# ~5.000 m², max 5,14 milhões m². 30.000 m² isola a cauda (~0,17% dos lotes) sem pegar lote
+# grande legítimo. VGV nesses é suprimido — área × TO% × R$/m² numa gleba de hectares cospe
+# bilhões sem sentido de incorporação. Conferido no Neon em 21/09/2026: dos 322 acima do limiar,
+# nenhum polígono contém outros lotes (não é quadra desenhada como lote) e ~40% dos vagos são
+# ZEPA — é gleba real, não erro de cadastro; por isso o aviso não manda "conferir geometria".
 AREA_LOTE_SUSPEITA_M2 = 30000.0
 
 
 def geometria_suspeita(area_geom_m2: float | None) -> bool:
-    """True se a área do lote é grande demais p/ ser lote urbano edificável (gleba/erro)."""
+    """True se a área do lote é grande demais p/ ser lote urbano edificável (gleba/ZEPA)."""
     return area_geom_m2 is not None and area_geom_m2 > AREA_LOTE_SUSPEITA_M2
+
+
+def aviso_area_grande(area_geom_m2: float | None, sigla: str | None) -> str | None:
+    """Por que o VGV foi suprimido, em linguagem de incorporador; None se a guarda não dispara.
+
+    ZEPA segue a LUOS (config/luos_parametros.csv): ZEPA-1 = uso conforme plano de manejo,
+    sem TO; ZEPA-2/3 = TO 40% com licenciamento ambiental. Fora de ZEPA é gleba: precisa de
+    parcelamento (Lei 6.766/79) antes de incorporar. O % de doação de áreas públicas vem da lei
+    municipal desde a Lei 9.785/99 — por isso não citamos número.
+    """
+    if area_geom_m2 is None or not geometria_suspeita(area_geom_m2):
+        return None
+    ha = f"{area_geom_m2 / 10_000:.1f}".replace(".", ",")
+    zona = re.sub(r"[^A-Z0-9]", "", (sigla or "").upper())
+    if zona.startswith("ZEPA"):
+        regra = (
+            "uso conforme plano de manejo"
+            if zona == "ZEPA1"
+            else "ocupação sujeita a licenciamento ambiental"
+        )
+        return (
+            f"Zona Especial de Proteção Ambiental ({zona}), {ha} ha — {regra}. "
+            "VGV de prédio único não se aplica."
+        )
+    return (
+        f"Gleba de {ha} ha — precisa de parcelamento do solo (Lei 6.766/79 e lei municipal) "
+        "antes de incorporar, e parte da área vira vias e áreas públicas. "
+        "VGV de prédio único não se aplica."
+    )
 
 
 def altura_label(

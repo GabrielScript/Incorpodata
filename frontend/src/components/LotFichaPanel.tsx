@@ -96,7 +96,7 @@ function Resumo({ lot }: { lot: LotFicha }) {
 
       {lot.geometria_suspeita && (
         <div className="aviso-suspeita" role="alert">
-          ⚠ {lot.geometria_aviso ?? 'Geometria suspeita — conferir cadastro.'}
+          ⚠ {lot.geometria_aviso ?? 'Área acima do padrão de lote urbano (gleba/ZEPA). VGV de prédio único não se aplica.'}
         </div>
       )}
 

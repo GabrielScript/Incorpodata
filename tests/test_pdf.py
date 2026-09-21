@@ -1,6 +1,11 @@
 """Testes da geração de PDF da ficha (puro — sem DB; só monta bytes a partir do LotFicha)."""
+import io
+
+import pytest
+
 from src.api.pdf import build_ficha_pdf
 from src.api.schemas import VGV, LotFicha, Restricao, Viability
+from src.api.viability import aviso_area_grande
 
 
 def _ficha_completa() -> LotFicha:
@@ -33,3 +38,23 @@ def test_pdf_sem_viability_nem_vgv_nao_quebra():
     f = LotFicha(id=1, bairro="X", restricao=Restricao(altura_label="A confirmar"))
     pdf = build_ficha_pdf(f)
     assert pdf[:5] == b"%PDF-"
+
+
+@pytest.mark.parametrize(
+    ("area", "sigla", "trecho"),
+    [(1_876_650, "ZEPA1", "Proteção Ambiental"), (647_225, "ZH2", "Gleba de 64,7 ha")],
+)
+def test_pdf_gleba_zepa_mostra_aviso_da_zona(area, sigla, trecho):
+    pypdf = pytest.importorskip("pypdf")
+    f = LotFicha(
+        id=2, bairro="X", tipo="TERRITORIAL", area_geom_m2=area,
+        viability=Viability(sigla=sigla),
+        restricao=Restricao(altura_label="A confirmar"),
+        geometria_suspeita=True,
+        geometria_aviso=aviso_area_grande(area, sigla),
+    )
+    txt = " ".join(p.extract_text() for p in pypdf.PdfReader(io.BytesIO(build_ficha_pdf(f))).pages)
+    txt = " ".join(txt.split())
+    assert "VGV não se aplica" in txt
+    assert trecho in txt
+    assert "conferir geometria" not in txt

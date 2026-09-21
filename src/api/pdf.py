@@ -99,12 +99,12 @@ def build_ficha_pdf(ficha: LotFicha) -> bytes:
     flow.append(Spacer(1, 6))
     flow.append(HRFlowable(width="100%", thickness=1, color=_LINE))
 
-    # ───── Geometria suspeita: avisa e suprime VGV (gleba/ZEPA/erro de cadastro) ─────
+    # ───── Gleba/ZEPA: avisa e suprime VGV ─────
     if ficha.geometria_suspeita:
-        flow.append(Paragraph("⚠ Geometria suspeita", s["section"]))
+        flow.append(Paragraph("⚠ VGV não se aplica", s["section"]))
         flow.append(Paragraph(
             ficha.geometria_aviso
-            or "Área implausível para lote urbano — conferir geometria. VGV suprimido.",
+            or "Área acima do padrão de lote urbano (gleba/ZEPA). VGV de prédio único não se aplica.",
             s["vgvk"],
         ))
         flow.append(Spacer(1, 8))
