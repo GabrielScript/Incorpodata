@@ -8,21 +8,22 @@ import type {
   StyleSpecification,
 } from 'maplibre-gl'
 
-// Dois basemaps SEM chave, alternáveis: CARTO Positron (claro, técnico) e Esri World Imagery
+// Dois basemaps SEM chave, alternáveis: Esri World Street Map (ruas) e Esri World Imagery
 // (satélite). O satélite mostra o terreno real visto de cima, com o polígono do lote por cima —
-// dá pra ver se está vago, o que há nele e a vizinhança. Esri começa oculto.
+// dá pra ver se está vago, o que há nele e a vizinhança. Satélite começa oculto.
+// CARTO Positron saiu em 09/2026: basemaps.cartocdn.com passou a exigir chave e devolve HTTP 200
+// com um PNG "API KEY REQUIRED" em todo tile (não dá erro — só pinta o aviso no mapa).
 const STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    carto: {
+    ruas: {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '© OpenStreetMap · © CARTO',
+      maxzoom: 19, // acima disso o MapLibre amplia o z19 em vez de pedir tile inexistente
+      attribution: '© Esri, HERE, Garmin, © OpenStreetMap',
     },
     esri: {
       type: 'raster',
@@ -34,7 +35,7 @@ const STYLE: StyleSpecification = {
     },
   },
   layers: [
-    { id: 'carto', type: 'raster', source: 'carto' },
+    { id: 'ruas', type: 'raster', source: 'ruas' },
     { id: 'esri', type: 'raster', source: 'esri', layout: { visibility: 'none' } },
   ],
 }

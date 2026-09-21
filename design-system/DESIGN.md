@@ -50,7 +50,7 @@ Gerado/auditado em 2026-06-16 aplicando as skills `ui-ux-pro-max` e `design-syst
 
 ## Componentes (inventário)
 - **Topbar** — marca (`h1`) + `FiltersBar` (bairro, área min/máx, **ordenar por**, só vagos, à venda).
-- **MapView** — MapLibre + basemap CARTO Positron; fill/line por `a_venda`; **legenda** (vago/à venda).
+- **MapView** — MapLibre + basemap Esri World Street Map (toggle Satélite: Esri World Imagery); fill/line por `a_venda`; **legenda** (vago/à venda).
 - **ResultsList** — cabeçalho com contagem + **ordenação ativa**; linha com logradouro, área, zona,
   tag **à venda** (texto+cor), projeção e **preço/m²**.
 - **LotFichaPanel** — abas Resumo/Completo; cards; **faixa de altura** ("Quanto pode subir");
