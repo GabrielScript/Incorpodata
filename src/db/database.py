@@ -18,7 +18,12 @@ def get_engine() -> Engine:
     # values_plus_batch: executemany de SQL textual (upsert de comps) vai em páginas via
     # execute_batch em vez de 1 round-trip por linha — contra Neon remoto, 28k linhas
     # caíam de >1h para minutos. Sem efeito em execute() simples da API.
-    return create_engine(url, future=True, executemany_mode="values_plus_batch")
+    # pool_pre_ping: o Neon suspende o compute ocioso e fecha as conexões do pool; sem o ping
+    # na retirada, o 1º request depois disso usava conexão morta → 500 ("SSL connection has
+    # been closed unexpectedly"). Custa 1 round-trip por request; reconecta sozinho.
+    return create_engine(
+        url, future=True, executemany_mode="values_plus_batch", pool_pre_ping=True
+    )
 
 
 def init_db(engine: Engine | None = None) -> None:

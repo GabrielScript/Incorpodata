@@ -64,7 +64,10 @@ export const SORT_LABELS: Record<LotSort, string> = {
 
 export const listBairros = () => json<string[]>(`${BASE}/bairros`)
 
-export function listLots(f: LotFilters): Promise<FeatureCollection> {
+/** GeoJSON dos lotes + `truncado`: o recorte passou do teto da API e veio cortado. */
+export type LotCollection = FeatureCollection & { truncado?: boolean }
+
+export function listLots(f: LotFilters): Promise<LotCollection> {
   const p = new URLSearchParams({
     bairro: f.bairro,
     only_vacant: String(f.onlyVacant),
@@ -72,7 +75,7 @@ export function listLots(f: LotFilters): Promise<FeatureCollection> {
   })
   if (f.areaMin.trim()) p.set('area_min', f.areaMin.trim())
   if (f.areaMax.trim()) p.set('area_max', f.areaMax.trim())
-  return json<FeatureCollection>(`${BASE}/lots?${p.toString()}`)
+  return json<LotCollection>(`${BASE}/lots?${p.toString()}`)
 }
 
 export const getLot = (id: number) => json<LotFicha>(`${BASE}/lots/${id}`)

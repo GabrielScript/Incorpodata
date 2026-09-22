@@ -215,6 +215,26 @@ button {
   margin: 0;
   padding: 0;
 }
+.results-note {
+  padding: 10px 16px;
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+.results-more {
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 14px 16px;
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.results-more:hover {
+  background: var(--surface-2);
+}
 .row {
   width: 100%;
   text-align: left;

@@ -41,6 +41,11 @@ router = APIRouter(prefix="/api", tags=["lots"])
 # continuam existindo; religar = ANUNCIOS_ATIVOS=1 quando houver frescor garantido.
 ANUNCIOS_ATIVOS = os.getenv("ANUNCIOS_ATIVOS", "0").strip().lower() in {"1", "true", "sim"}
 
+# Teto de lotes por request do mapa. Cobre TODOS os vagos de JP (23.682 em 09/2026, 64 bairros)
+# e o maior bairro com construídos (17.744) — "Todos os bairros" mostra a cidade inteira. Só
+# "Todos" + construídos (~187 mil) passa do teto: a resposta sai com truncado=true e a UI avisa.
+LIMITE_LOTES_MAPA = 30_000
+
 # Raio (m, SRID 31985) p/ a mediana de R$/m² na MICRO-localização do lote. Mediana do bairro
 # inteiro mascara variância intra-bairro (frente-mar × fundo); só caímos nela se o raio for ralo.
 RAIO_COMPS_M = 800.0
@@ -84,15 +89,19 @@ def list_lots(
     area_min: float | None = Query(None, ge=0, description="área mínima do lote (m²)"),
     area_max: float | None = Query(None, ge=0, description="área máxima do lote (m²)"),
     sort: str = Query("none", pattern=_SORT_PATTERN, description="ordenação (ver _ORDER)"),
-    limit: int = Query(2000, le=10000),
+    limit: int = Query(LIMITE_LOTES_MAPA, ge=1, le=LIMITE_LOTES_MAPA),
     conn: Connection = Depends(get_conn),
-) -> dict:
-    """Lotes como GeoJSON FeatureCollection (geom reprojetada 31985 -> 4326)."""
+) -> Response:
+    """Lotes como GeoJSON FeatureCollection (geom reprojetada 31985 -> 4326).
+
+    `truncado` (membro extra da FeatureCollection) = o recorte passou de `limit` e veio cortado.
+    """
+    # ST_AsGeoJSON com 6 casas ≈ 11 cm: sobra p/ lote; as 9 do default são ruído que não comprime.
     sql = f"""
         SELECT l.id, l.logradouro, l.bairro, l.tipo, l.area_geom_m2, lz.sigla,
                lz.area_projecao_max_m2,
                (al.anuncio_id IS NOT NULL) AS a_venda, al.preco, al.preco_m2,
-               ST_AsGeoJSON(ST_Transform(l.geom, 4326)) AS geojson
+               ST_AsGeoJSON(ST_Transform(l.geom, 4326), 6) AS geojson
         FROM geo.lotes l
         LEFT JOIN geo.lote_zona lz ON lz.lote_id = l.id
         LEFT JOIN LATERAL (
@@ -119,35 +128,40 @@ def list_lots(
             "a_venda": a_venda,
             "area_min": area_min,
             "area_max": area_max,
-            "limit": limit,
+            "limit": limit + 1,  # 1 a mais que o teto = sabe se cortou sem um COUNT(*) à parte
         },
     ).mappings().all()
+    truncado = len(rows) > limit
 
+    # JSON montado à mão: a geometria já sai do PostGIS como texto GeoJSON e entra crua, sem
+    # json.loads + jsonable_encoder — p/ a cidade inteira (~24 mil lotes) o caminho padrão do
+    # FastAPI é ~10× mais lento e usa ~3× mais memória.
     features = []
-    for r in rows:
+    for r in rows[:limit]:
         if not r["geojson"]:
             continue
+        props = {
+            "id": r["id"],
+            "logradouro": r["logradouro"],
+            "bairro": r["bairro"],
+            "tipo": r["tipo"],
+            "area_m2": _f(r["area_geom_m2"]),
+            "area_projecao_max_m2": _f(r["area_projecao_max_m2"]),
+            "geometria_suspeita": geometria_suspeita(_f(r["area_geom_m2"])),
+            "sigla": r["sigla"],
+            "a_venda": bool(r["a_venda"]) and ANUNCIOS_ATIVOS,
+            "preco": _f(r["preco"]) if ANUNCIOS_ATIVOS else None,
+            "preco_m2": _f(r["preco_m2"]) if ANUNCIOS_ATIVOS else None,
+        }
         features.append(
-            {
-                "type": "Feature",
-                "id": r["id"],
-                "geometry": json.loads(r["geojson"]),
-                "properties": {
-                    "id": r["id"],
-                    "logradouro": r["logradouro"],
-                    "bairro": r["bairro"],
-                    "tipo": r["tipo"],
-                    "area_m2": _f(r["area_geom_m2"]),
-                    "area_projecao_max_m2": _f(r["area_projecao_max_m2"]),
-                    "geometria_suspeita": geometria_suspeita(_f(r["area_geom_m2"])),
-                    "sigla": r["sigla"],
-                    "a_venda": bool(r["a_venda"]) and ANUNCIOS_ATIVOS,
-                    "preco": _f(r["preco"]) if ANUNCIOS_ATIVOS else None,
-                    "preco_m2": _f(r["preco_m2"]) if ANUNCIOS_ATIVOS else None,
-                },
-            }
+            f'{{"type":"Feature","id":{int(r["id"])},"geometry":{r["geojson"]},'
+            f'"properties":{json.dumps(props, ensure_ascii=False)}}}'
         )
-    return {"type": "FeatureCollection", "features": features}
+    body = (
+        f'{{"type":"FeatureCollection","truncado":{json.dumps(truncado)},'
+        f'"features":[{",".join(features)}]}}'
+    )
+    return Response(content=body, media_type="application/json")
 
 
 def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:

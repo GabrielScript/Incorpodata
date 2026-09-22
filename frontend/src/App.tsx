@@ -32,6 +32,9 @@ export default function App() {
   )
 
   const count = lots.data?.features.length ?? 0
+  // Só o centroide da ficha DO lote selecionado (a anterior fica em ficha.data enquanto carrega).
+  const selectedCenter =
+    ficha.data != null && ficha.data.id === selectedId ? (ficha.data.centroid ?? null) : null
 
   return (
     <div className="app">
@@ -59,7 +62,12 @@ export default function App() {
       </header>
       {view === 'explorar' && (
         <main className="main">
-          <MapView data={lots.data} selectedId={selectedId} onSelect={setSelectedId} />
+          <MapView
+            data={lots.data}
+            selectedId={selectedId}
+            selectedCenter={selectedCenter}
+            onSelect={setSelectedId}
+          />
           <aside className="panel">
             {selectedId != null ? (
               <LotFichaPanel

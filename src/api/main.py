@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src.api.auth import router as auth_router
@@ -29,6 +30,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# O Cloud Run não comprime nada sozinho. Os lotes da cidade inteira no mapa são ~13 MB de
+# GeoJSON cru → ~2 MB em gzip; de quebra comprime o bundle do frontend.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 @app.middleware("http")

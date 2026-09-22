@@ -1,13 +1,16 @@
-import { memo } from 'react'
-import type { FeatureCollection } from 'geojson'
+import { memo, useEffect, useState } from 'react'
 import type { LotProperties } from '../api/types'
-import { SORT_LABELS, type LotSort } from '../api/client'
+import { SORT_LABELS, type LotCollection, type LotSort } from '../api/client'
 
 const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
 const fmtM2 = (v: number) => `${nf0.format(v)} m²`
 
+// Linhas desenhadas por vez. A cidade inteira são ~24 mil lotes: tudo de uma vez travava a
+// aba ~10 s (e de novo a cada "← resultados"). O mapa segue mostrando o recorte inteiro.
+const PAGINA = 500
+
 interface Props {
-  data: FeatureCollection | null
+  data: LotCollection | null
   loading: boolean
   error: Error | null
   count: number
@@ -17,6 +20,9 @@ interface Props {
 }
 
 export function ResultsList({ data, loading, error, count, sort, selectedId, onSelect }: Props) {
+  const [shown, setShown] = useState(PAGINA)
+  useEffect(() => setShown(PAGINA), [data]) // recorte novo recomeça do topo
+
   if (loading) return <div className="state">Carregando lotes…</div>
   if (error)
     return <div className="state error">Erro: {error.message}. O backend está no ar? (uvicorn)</div>
@@ -27,17 +33,29 @@ export function ResultsList({ data, loading, error, count, sort, selectedId, onS
     <div className="results">
       <div className="results-head">
         <span>
-          {count} lote{count === 1 ? '' : 's'}
+          {nf0.format(count)} lote{count === 1 ? '' : 's'}
         </span>
         {sort !== 'none' && <span className="results-sort">↓ {SORT_LABELS[sort]}</span>}
       </div>
+      {data.truncado && (
+        <div className="results-note">
+          Recorte grande demais: só os primeiros {nf0.format(count)} lotes vieram. Escolha um
+          bairro ou marque “Só vagos” para ver todos.
+        </div>
+      )}
       <ul className="results-list">
-        {data.features.map((f) => {
+        {data.features.slice(0, shown).map((f) => {
           const p = f.properties as unknown as LotProperties
           const id = Number(f.id ?? p.id)
           return <ResultRow key={id} id={id} p={p} active={id === selectedId} onSelect={onSelect} />
         })}
       </ul>
+      {count > shown && (
+        <button className="results-more" onClick={() => setShown((s) => s + PAGINA)}>
+          Mostrar mais {nf0.format(Math.min(PAGINA, count - shown))} · {nf0.format(shown)} de{' '}
+          {nf0.format(count)}
+        </button>
+      )}
     </div>
   )
 }

@@ -80,19 +80,62 @@ const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
 interface Props {
   data: FeatureCollection | null
   selectedId: number | null
+  /** Centroide [lng, lat] do lote selecionado (da ficha): localiza o lote quando o polígono
+   *  dele não está no recorte carregado (outro bairro/filtro). */
+  selectedCenter: [number, number] | null
   onSelect: (id: number) => void
 }
 
-export function MapView({ data, selectedId, onSelect }: Props) {
+export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const readyRef = useRef(false)
-  const selRef = useRef<number | null>(null)
+  const selRef = useRef<number | null>(null) // id com feature-state 'selected' aplicado
+  const pinRef = useRef<maplibregl.Marker | null>(null)
+  const framedRef = useRef(false) // câmera já enquadrou algo nesta montagem do mapa
+  // Últimas props, p/ os handlers do mapa (criados uma vez) não lerem valor velho.
   const onSelectRef = useRef(onSelect)
+  const dataRef = useRef(data)
+  const selIdRef = useRef(selectedId)
+  const centerRef = useRef(selectedCenter)
   const [satellite, setSatellite] = useState(false)
   useEffect(() => {
     onSelectRef.current = onSelect
+    dataRef.current = data
+    selIdRef.current = selectedId
+    centerRef.current = selectedCenter
   })
+
+  // Destaque do lote selecionado (feature-state; sobrevive a setData).
+  function paintSelected(m: MLMap) {
+    if (selRef.current != null) m.removeFeatureState({ source: 'lots', id: selRef.current })
+    if (selIdRef.current != null) {
+      m.setFeatureState({ source: 'lots', id: selIdRef.current }, { selected: true })
+    }
+    selRef.current = selIdRef.current
+  }
+
+  // Localiza o lote selecionado: câmera no polígono dele (se está no recorte carregado) ou no
+  // centroide da ficha — aí com pino, porque lote fora do recorte não tem polígono no mapa.
+  // Só move a câmera se o lote não estiver bem à vista: clicar no mapa não dá pulo.
+  function locateSelected(m: MLMap, move = true) {
+    const id = selIdRef.current
+    const center = centerRef.current
+    const poly = id != null ? lotBounds(dataRef.current, id) : null
+    const pin = id != null && !poly ? center : null
+    if (pin) {
+      pinRef.current = (pinRef.current ?? new maplibregl.Marker({ color: '#0b3d39' })).setLngLat(pin).addTo(m)
+    } else {
+      pinRef.current?.remove()
+      pinRef.current = null
+    }
+    const alvo = poly ?? (pin ? new maplibregl.LngLatBounds(pin, pin) : null)
+    if (!alvo || !move) return
+    framedRef.current = true
+    if (!wellInView(m, alvo)) {
+      m.fitBounds(alvo, { padding: 80, maxZoom: poly ? 18 : 17, duration: prefersReducedMotion() ? 0 : 600 })
+    }
+  }
 
   // init (uma vez)
   useEffect(() => {
@@ -128,9 +171,14 @@ export function MapView({ data, selectedId, onSelect }: Props) {
       })
       readyRef.current = true
       const src = m.getSource('lots') as GeoJSONSource | undefined
-      if (src && data) {
-        src.setData(data)
+      const data = dataRef.current
+      if (src && data) src.setData(data)
+      paintSelected(m)
+      // Voltando pra aba com um lote aberto (vindo de Oportunidades/Landbank): vai até ele.
+      if (selIdRef.current != null) locateSelected(m)
+      else if (data) {
         fitToData(m, data)
+        framedRef.current = true
       }
     })
 
@@ -152,32 +200,43 @@ export function MapView({ data, selectedId, onSelect }: Props) {
       m.remove()
       mapRef.current = null
       readyRef.current = false
+      pinRef.current = null
+      framedRef.current = false
     }
   }, [])
 
-  // dados mudaram
+  // dados mudaram (filtro): enquadra o recorte novo — a menos que o lote aberto esteja nele
+  // ou que seja a 1ª carga depois de chegar com um lote aberto; aí fica/vai no lote.
   useEffect(() => {
     const m = mapRef.current
     if (!m || !readyRef.current) return
     const src = m.getSource('lots') as GeoJSONSource | undefined
-    if (src && data) {
-      src.setData(data)
+    if (!src || !data) return
+    src.setData(data)
+    const sel = selIdRef.current
+    if (sel != null && (!framedRef.current || lotBounds(data, sel))) {
+      locateSelected(m)
+    } else {
       fitToData(m, data)
+      framedRef.current = true
+      locateSelected(m, false) // só acerta o pino (lote aberto que saiu do recorte)
     }
   }, [data])
 
-  // seleção mudou
+  // seleção mudou (clique no mapa/lista, ou lote aberto de outra aba)
   useEffect(() => {
     const m = mapRef.current
     if (!m || !readyRef.current) return
-    if (selRef.current != null) {
-      m.removeFeatureState({ source: 'lots', id: selRef.current })
-    }
-    if (selectedId != null) {
-      m.setFeatureState({ source: 'lots', id: selectedId }, { selected: true })
-    }
-    selRef.current = selectedId
+    paintSelected(m)
+    locateSelected(m)
   }, [selectedId])
+
+  // ficha chegou com o centroide: localiza o lote que não tem polígono no recorte
+  useEffect(() => {
+    const m = mapRef.current
+    if (!m || !readyRef.current || selectedCenter == null) return
+    locateSelected(m)
+  }, [selectedCenter])
 
   // basemap satélite on/off + legibilidade do polígono sobre a imagem
   useEffect(() => {
@@ -222,6 +281,20 @@ function fitToData(m: MLMap, fc: FeatureCollection) {
   if (any && !b.isEmpty()) {
     m.fitBounds(b, { padding: 40, maxZoom: 17, duration: prefersReducedMotion() ? 0 : 600 })
   }
+}
+
+/** Caixa do polígono do lote `id` no recorte carregado; null se ele não está no recorte. */
+function lotBounds(fc: FeatureCollection | null, id: number): maplibregl.LngLatBounds | null {
+  const f = fc?.features.find((x) => Number(x.id ?? (x.properties as { id?: number } | null)?.id) === id)
+  if (!f) return null
+  const b = new maplibregl.LngLatBounds()
+  return extend(b, f.geometry) && !b.isEmpty() ? b : null
+}
+
+/** Lote já bem à vista: inteiro na tela e com zoom de enxergar lote (≥ 16). */
+function wellInView(m: MLMap, b: maplibregl.LngLatBounds): boolean {
+  const tela = m.getBounds()
+  return m.getZoom() >= 16 && tela.contains(b.getSouthWest()) && tela.contains(b.getNorthEast())
 }
 
 function extend(b: maplibregl.LngLatBounds, g: Geometry | null): boolean {
