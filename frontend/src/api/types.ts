@@ -1,11 +1,5 @@
 // Espelha os modelos da API (src/api/schemas.py).
 
-export interface User {
-  id: number
-  email: string
-  nome?: string | null
-}
-
 export interface Viability {
   sigla?: string | null
   nome_zona?: string | null

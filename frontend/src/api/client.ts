@@ -1,26 +1,11 @@
 import type { FeatureCollection } from 'geojson'
-import type { LandbankItem, LotFicha, Oportunidade, User } from './types'
+import type { LandbankItem, LotFicha, Oportunidade } from './types'
 
 const BASE = '/api'
 
-// ───────── auth (token de dev por ora; UI de login fica p/ depois) ─────────
-const TOKEN_KEY = 'incorpodata_token'
-
-export function getToken(): string | null {
-  const env = (import.meta as unknown as { env?: Record<string, string> }).env
-  return localStorage.getItem(TOKEN_KEY) ?? env?.VITE_DEV_TOKEN ?? null
-}
-export function setToken(t: string): void {
-  localStorage.setItem(TOKEN_KEY, t)
-}
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
-}
-
-function authHeaders(): Record<string, string> {
-  const t = getToken()
-  return t ? { Authorization: `Bearer ${t}` } : {}
-}
+// App aberto: quem tem o link acessa tudo, sem login. A API de auth (/api/auth) e o landbank
+// por conta (/api/landbank) seguem no backend, sem uso pelo frontend — voltam se os planos
+// pagos forem ligados.
 
 async function json<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -28,12 +13,9 @@ async function json<T>(url: string): Promise<T> {
   return (await res.json()) as T
 }
 
-/** Request autenticada (landbank). Extrai `detail` do erro da API quando houver. */
+/** Request que extrai `detail` do erro da API quando houver (ex.: 402 do gate de planos). */
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { ...(init?.headers ?? {}), ...authHeaders() },
-  })
+  const res = await fetch(url, init)
   if (res.status === 204) return undefined as T
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`
@@ -95,42 +77,18 @@ export function listLots(f: LotFilters): Promise<FeatureCollection> {
 
 export const getLot = (id: number) => json<LotFicha>(`${BASE}/lots/${id}`)
 
-// Ranking de oportunidades por valor residual (feature paga → request autenticada).
+// Ranking de oportunidades por valor residual (público enquanto o gate de planos está off).
 export const listOportunidades = (bairro: string, limit = 20) =>
   req<Oportunidade[]>(`${BASE}/oportunidades?bairro=${encodeURIComponent(bairro)}&limit=${limit}`)
 
 // PDF da ficha (rota pública; abre direto no navegador).
 export const lotPdfUrl = (id: number) => `${BASE}/lots/${id}/pdf`
 
-// ───────── auth (register / login / me) ─────────
-// `register` cria a conta mas não devolve token; o fluxo chama `login` em seguida.
-export const register = (email: string, senha: string, nome?: string, codigo?: string) =>
-  req<User>(`${BASE}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email,
-      senha,
-      nome: nome || undefined,
-      invite_code: codigo || undefined,
-    }),
-  })
-
-// O backend usa OAuth2PasswordRequestForm → corpo form-urlencoded (username/password).
-export async function login(email: string, senha: string): Promise<User> {
-  const body = new URLSearchParams({ username: email, password: senha })
-  const { access_token } = await req<{ access_token: string }>(`${BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
-  setToken(access_token)
-  return me()
-}
-
-export const me = () => req<User>(`${BASE}/auth/me`)
-
-// ───────── landbank (pipeline de lotes salvos, escopado por usuário) ─────────
+// ───────── landbank (pipeline de lotes salvos, no navegador de cada um) ─────────
+// Sem login, cada pessoa tem a própria lista no localStorage deste navegador: ninguém vê a
+// lista de ninguém (construtoras concorrentes usam o mesmo link). Não sincroniza entre
+// aparelhos e some se o navegador limpar os dados do site. Async p/ manter a assinatura da
+// versão por API — o LandbankBoard não muda.
 export const ESTAGIOS = [
   'triagem',
   'analise',
@@ -150,21 +108,60 @@ export const ESTAGIO_LABELS: Record<Estagio, string> = {
   descartado: 'Descartado',
 }
 
-export const listLandbank = () => req<LandbankItem[]>(`${BASE}/landbank`)
+const LANDBANK_KEY = 'incorpodata_landbank'
 
-export const addLandbank = (loteId: number) =>
-  req<LandbankItem>(`${BASE}/landbank`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lote_id: loteId }),
-  })
+function lbRead(): LandbankItem[] {
+  try {
+    const raw = localStorage.getItem(LANDBANK_KEY)
+    const v: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(v) ? (v as LandbankItem[]) : []
+  } catch {
+    return [] // storage bloqueado (modo anônimo/política) ou JSON corrompido → lista vazia
+  }
+}
 
-export const patchLandbank = (id: number, body: { estagio?: Estagio; notas?: string }) =>
-  req<LandbankItem>(`${BASE}/landbank/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+function lbWrite(items: LandbankItem[]): void {
+  try {
+    localStorage.setItem(LANDBANK_KEY, JSON.stringify(items))
+  } catch {
+    throw new Error('o navegador não deixou salvar (modo anônimo ou armazenamento cheio)')
+  }
+}
 
-export const removeLandbank = (id: number) =>
-  req<void>(`${BASE}/landbank/${id}`, { method: 'DELETE' })
+export const listLandbank = async (): Promise<LandbankItem[]> => lbRead()
+
+/** Salva o lote com logradouro/bairro/área da ficha (o board não re-consulta a API). */
+export async function addLandbank(
+  lot: Pick<LotFicha, 'id' | 'logradouro' | 'bairro' | 'area_geom_m2'>,
+): Promise<LandbankItem> {
+  const items = lbRead()
+  const ja = items.find((i) => i.lote_id === lot.id)
+  if (ja) return ja // idempotente, como a API era: lote já salvo não duplica
+  const item: LandbankItem = {
+    id: items.reduce((m, i) => Math.max(m, i.id), 0) + 1,
+    lote_id: lot.id,
+    estagio: 'triagem',
+    notas: null,
+    logradouro: lot.logradouro ?? null,
+    bairro: lot.bairro ?? null,
+    area_geom_m2: lot.area_geom_m2 ?? null,
+  }
+  lbWrite([...items, item])
+  return item
+}
+
+export async function patchLandbank(
+  id: number,
+  body: { estagio?: Estagio; notas?: string },
+): Promise<LandbankItem> {
+  const items = lbRead()
+  const i = items.findIndex((x) => x.id === id)
+  if (i < 0) throw new Error('este lote não está mais no landbank')
+  items[i] = { ...items[i], ...body }
+  lbWrite(items)
+  return items[i]
+}
+
+export async function removeLandbank(id: number): Promise<void> {
+  lbWrite(lbRead().filter((x) => x.id !== id))
+}

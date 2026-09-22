@@ -13,12 +13,10 @@ const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
 const m2 = (v?: number | null) => (v == null ? '—' : `${nf0.format(v)} m²`)
 
 interface Props {
-  authed: boolean
-  onRequireAuth: () => void
   onOpenLot: (id: number) => void
 }
 
-export function LandbankBoard({ authed, onRequireAuth, onOpenLot }: Props) {
+export function LandbankBoard({ onOpenLot }: Props) {
   const [items, setItems] = useState<LandbankItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -35,26 +33,10 @@ export function LandbankBoard({ authed, onRequireAuth, onOpenLot }: Props) {
     }
   }
 
-  // Carrega só quando autenticado; re-carrega ao logar.
   useEffect(() => {
-    if (authed) void reload()
-    else setItems(null)
-  }, [authed])
+    void reload()
+  }, [])
 
-  if (!authed) {
-    return (
-      <div className="lb-empty">
-        <strong>Entre para usar o landbank.</strong>
-        <p>
-          O landbank é o seu pipeline de terrenos — cada lote salvo fica na sua conta e visível só
-          para você.
-        </p>
-        <button className="btn" onClick={onRequireAuth}>
-          Entrar ou criar conta
-        </button>
-      </div>
-    )
-  }
   if (loading && items === null) return <div className="state">Carregando landbank…</div>
   if (error) {
     return (
@@ -74,12 +56,19 @@ export function LandbankBoard({ authed, onRequireAuth, onOpenLot }: Props) {
   return (
     <div className="lb">
       <div className="lb-head">
-        Landbank · <strong>{total}</strong> {total === 1 ? 'lote salvo' : 'lotes salvos'}
+        Landbank · <strong>{total}</strong> {total === 1 ? 'lote salvo' : 'lotes salvos'} ·{' '}
+        <span title="A lista fica guardada só neste navegador: não aparece em outro computador e some se você limpar os dados do site.">
+          neste navegador
+        </span>
       </div>
       {total === 0 ? (
         <div className="lb-empty">
           <strong>Nenhum lote salvo ainda.</strong>
           <p>Em Explorar, abra a ficha de um lote e clique em “+ landbank”.</p>
+          <p>
+            A lista fica guardada só neste navegador — ninguém mais vê, e ela não acompanha você
+            em outro computador.
+          </p>
         </div>
       ) : (
         <div className="lb-board">

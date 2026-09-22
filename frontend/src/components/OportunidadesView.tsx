@@ -8,27 +8,20 @@ const pct = (v?: number | null) => (v == null ? '—' : `${nf0.format(v)}%`)
 
 interface Props {
   bairro: string
-  authed: boolean
-  onRequireAuth: () => void
   onOpenLot: (id: number) => void
 }
 
-/** Ranking das melhores oportunidades do recorte por valor residual (feature paga). */
-export function OportunidadesView({ bairro, authed, onRequireAuth, onOpenLot }: Props) {
-  // Sem gate de login no cliente: a API decide (freemium). Com PLANS_ENFORCED ligado ela
-  // responde 402 para quem não tem plano — só então oferecemos o login.
-  const ops = useAsync<Oportunidade[]>(() => listOportunidades(bairro, 20), [bairro, authed])
+/** Ranking das melhores oportunidades do recorte por valor residual. */
+export function OportunidadesView({ bairro, onOpenLot }: Props) {
+  // App aberto, sem login. Se PLANS_ENFORCED for ligado na API ela responde 402 — aí o
+  // ranking fica indisponível até o login voltar ao frontend.
+  const ops = useAsync<Oportunidade[]>(() => listOportunidades(bairro, 20), [bairro])
   const bloqueado = ops.error != null && /pago|plano|402/i.test(ops.error.message)
 
   if (bloqueado) {
     return (
       <div className="oportunidades">
-        <div className="state">
-          O ranking de oportunidades é uma feature dos planos pagos.{' '}
-          <button className="linkbtn" onClick={onRequireAuth}>
-            Entrar
-          </button>
-        </div>
+        <div className="state">O ranking de oportunidades é uma feature dos planos pagos.</div>
       </div>
     )
   }

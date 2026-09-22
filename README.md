@@ -56,8 +56,8 @@ Spec completa: `docs/superpowers/specs/2026-06-15-terraiq-app-design.md`. Respon
 - `GET /api/lots/{id}/pdf` — **ficha em PDF** (ReportLab) com o VGV em destaque, levável ao comitê.
 - `GET /api/oportunidades` — **ranking** do recorte por **valor residual** (quanto vale pagar), feature paga. O IncorpoScore ainda é calculado e devolvido, mas **não ordena nem aparece na UI**: sem anúncio casado, 3 dos 4 eixos eram quase só o preço/m² do bairro relido.
 - **Anúncios de terreno (`market.anuncios`) desligados por default** (`ANUNCIOS_ATIVOS=0`): sem scraper agendado o dado envelhece e um lote "à venda" já vendido queima credibilidade. Schema, scraper e casamento continuam; religar com `ANUNCIOS_ATIVOS=1` quando houver frescor garantido.
-- **Auth** (`/api/auth`): `register` · `login` (JWT) · `me`. bcrypt + rate-limit por IP + erro genérico (não revela se e-mail existe). **Registro por convite:** `register` exige `invite_code` válido (env `REGISTER_INVITE_CODE`, 1+ códigos por vírgula); env vazio/ausente = registro **fechado**. Lógica pura testada em `tests/test_auth_invite.py`.
-- **Landbank** (`/api/landbank`): CRUD do pipeline de lotes salvos, **escopado por usuário**. Estágios: `triagem → analise → opcao → due_diligence → adquirido/descartado`.
+- **Auth** (`/api/auth`): `register` · `login` (JWT) · `me`. bcrypt + rate-limit por IP + erro genérico (não revela se e-mail existe). **Registro por convite:** `register` exige `invite_code` válido (env `REGISTER_INVITE_CODE`, 1+ códigos por vírgula); env vazio/ausente = registro **fechado**. Lógica pura testada em `tests/test_auth_invite.py`. **Sem uso pelo frontend desde 09/2026** (app aberto, ver abaixo); fica para quando os planos pagos forem ligados.
+- **Landbank** (`/api/landbank`): CRUD do pipeline de lotes salvos, **escopado por usuário**. Estágios: `triagem → analise → opcao → due_diligence → adquirido/descartado`. Também sem uso pelo frontend hoje — o landbank vive no navegador.
 - Viabilidade pura e testada em `src/api/viability.py` (a altura em JP é **espacial**, não vem da zona) — `tests/test_viability.py`.
 - **VGV** (`estimar_vgv`, puro/testado): `projeção_térreo × eficiência × R$/m² mediano do bairro`. Headline sólido = **VGV/pavimento** (independe de altura); total usa premissa de pavimentos. R$/m² vem de `market.comps` (comps de venda raspados, bairro canonizado contra `geo.lotes`) via view `market.preco_m2_bairro` (mediana/Q1/Q3/N, outliers saneados).
 
@@ -65,8 +65,8 @@ Spec completa: `docs/superpowers/specs/2026-06-15-terraiq-app-design.md`. Respon
 - **Oportunidades** (home) — top-20 do recorte ordenado por valor residual, com VGV e % terreno/VGV; clique abre a ficha.
 - **Explorar** — mapa de lotes (MapLibre) + barra de filtros + lista de resultados.
 - **Ficha do lote** — painel com cadastro, viabilidade, **VGV**, **valor residual** e restrição de altura; botões **+ landbank** e **PDF**.
-- **Landbank** — board (kanban) por estágio: mover, anotar e remover lotes salvos (consome `/api/landbank`, JWT).
-- **Login/registro** — modal (`AuthModal`) no topo (**Entrar**): login/criar conta via `/api/auth` (JWT em `localStorage`). Explorar é público; o **Landbank** exige login. Token de dev (`python -m src.api.dev_token`) segue válido para debug.
+- **Landbank** — board (kanban) por estágio: mover, anotar e remover lotes salvos. Fica no `localStorage` do navegador de cada pessoa (`incorpodata_landbank`): privado, sem conta, mas não sincroniza entre aparelhos.
+- **Sem login:** o app é aberto — quem tem o link acessa tudo (Explorar, Oportunidades, PDF, Landbank). A UI de login (`AuthModal`) saiu em 09/2026; o backend de auth continua disponível.
 
 ### Schema `app` (Alembic — `migrations/`)
 - `app.users` (auth B2B) · `app.landbank_items` (lote salvo + estágio + notas, enum `app.estagio_lote`).
@@ -77,7 +77,7 @@ Spec completa: `docs/superpowers/specs/2026-06-15-terraiq-app-design.md`. Respon
 2. [x] Camada LUOS: parâmetros da LC 166/2024 por zona → área construível por lote.
 3. [x] API read-only (lotes/ficha) + frontend (mapa Bancários + ficha + filtros).
 4. [x] Schema `app` + auth (JWT) + landbank (backend).
-5. [~] Frontend: **tela Landbank ✓**, **login/registro ✓**; falta "⚑ reportar erro" e saved searches.
+5. [~] Frontend: **tela Landbank ✓** (no navegador, sem login); falta "⚑ reportar erro" e saved searches.
 6. [ ] Scrapers: ChavesNaMão → normalizar → geocodificar → casar no lote.
 7. [x] Comps de venda (`market.comps` + view `preco_m2_bairro`) → **VGV potencial na ficha**.
 8. [x] **PDF da ficha** (com VGV). Jobs 2-3 (melhor uso, valor residual) ainda pendentes.
@@ -86,10 +86,7 @@ Spec completa: `docs/superpowers/specs/2026-06-15-terraiq-app-design.md`. Respon
 ## Produção
 - **No ar:** https://incorpodata-550574336825.southamerica-east1.run.app — projeto GCP `incorpodata-app`, região `southamerica-east1`, banco Neon (free).
 - **Redeploy:** `PROJECT=incorpodata-app DATABASE_URL='<neon-url>' JWT_SECRET='<segredo>' bash deploy/deploy_cloudrun.sh` (runbook em `deploy/DEPLOY.md`).
-- **Landbank no site:** clique em **Entrar** (topo) → criar conta / login. O token JWT fica no
-  navegador e o Landbank passa a salvar por usuário. **Criar conta exige código de convite** —
-  defina `REGISTER_INVITE_CODE` no deploy e entregue o código a cada cliente (sem ele, cadastro
-  fica fechado).
+- **Acesso:** aberto, sem login — basta o link. O Landbank salva no navegador de cada pessoa.
 
 ## Como rodar
 ```bash

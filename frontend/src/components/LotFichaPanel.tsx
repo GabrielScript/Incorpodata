@@ -67,7 +67,7 @@ function Resumo({ lot }: { lot: LotFicha }) {
     setSave('saving')
     setSaveMsg(null)
     try {
-      await addLandbank(lot.id)
+      await addLandbank(lot)
       setSave('saved')
     } catch (e) {
       setSave('error')
