@@ -44,7 +44,8 @@ _UPSERT = text(
        lat, lon, geom, tipo, business, quartos, banheiros, suites, vagas, iptu, condominio,
        area_terreno_m2, anunciante_nome, anunciante_creci, loc_aproximada, imagem_url, fontes,
        scraped_at, preco_esperado, preco_esperado_lo, preco_esperado_hi, desconto_pct,
-       confiabilidade, suspeito, oportunidade_tier, oportunidade_modelo, ativo, ultimo_visto)
+       confiabilidade, suspeito, oportunidade_tier, oportunidade_modelo, logradouro_texto,
+       ativo, ultimo_visto)
     VALUES
       (:fonte, :fonte_id, :url, :titulo, :preco, :area_anunc_m2, :bairro, 'imobiliaria',
        :lat, :lon,
@@ -54,7 +55,7 @@ _UPSERT = text(
        :area_terreno_m2, :anunciante_nome, :anunciante_creci, :loc_aproximada, :imagem_url,
        :fontes, CAST(:scraped_at AS timestamptz), :preco_esperado, :preco_esperado_lo,
        :preco_esperado_hi, :desconto_pct, :confiabilidade, :suspeito, :oportunidade_tier,
-       :oportunidade_modelo, true, now())
+       :oportunidade_modelo, :logradouro, true, now())
     ON CONFLICT (fonte, fonte_id) DO UPDATE SET
       url = EXCLUDED.url, titulo = EXCLUDED.titulo, preco = EXCLUDED.preco,
       area_anunc_m2 = EXCLUDED.area_anunc_m2, bairro_texto = EXCLUDED.bairro_texto,
@@ -71,7 +72,8 @@ _UPSERT = text(
       preco_esperado_lo = EXCLUDED.preco_esperado_lo, preco_esperado_hi = EXCLUDED.preco_esperado_hi,
       desconto_pct = EXCLUDED.desconto_pct, confiabilidade = EXCLUDED.confiabilidade,
       suspeito = EXCLUDED.suspeito, oportunidade_tier = EXCLUDED.oportunidade_tier,
-      oportunidade_modelo = EXCLUDED.oportunidade_modelo, ativo = true, ultimo_visto = now()
+      oportunidade_modelo = EXCLUDED.oportunidade_modelo,
+      logradouro_texto = EXCLUDED.logradouro_texto, ativo = true, ultimo_visto = now()
     """
 )
 
@@ -161,6 +163,7 @@ def rows_for(ans: list[AnuncioBP], artifact: dict | None, enriched: dict[str, di
         rows.append({
             "fonte": a.fonte, "fonte_id": a.fonte_id, "url": a.url, "titulo": a.titulo,
             "preco": a.preco, "area_anunc_m2": a.area_anunc_m2, "bairro": a.bairro,
+            "logradouro": a.logradouro,
             "lat": a.lat, "lon": a.lon, "tipo": a.tipo, "quartos": a.quartos,
             "banheiros": a.banheiros, "suites": a.suites, "vagas": a.vagas, "iptu": a.iptu,
             "condominio": a.condominio, "area_terreno_m2": a.area_terreno_m2,

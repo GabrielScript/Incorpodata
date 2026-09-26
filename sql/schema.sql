@@ -141,6 +141,7 @@ ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS confiabilidade    numeric; 
 ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS suspeito          boolean;  -- |z| > 3: bom/ruim demais
 ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS oportunidade_tier text;     -- rara | boa | mercado | acima | suspeito
 ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS oportunidade_modelo text;   -- lightgbm | hedonico
+ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS logradouro_texto  text;     -- rua anunciada (confere o pino)
 
 -- Séries de mercado (BCB SGS: juros do financiamento imobiliário; FipeZAP etc.). Mensal.
 CREATE TABLE IF NOT EXISTS market.indicadores (
@@ -161,6 +162,20 @@ LANGUAGE sql IMMUTABLE AS $$
     'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'))
 $$;
 
+-- Chave p/ comparar a rua do anúncio ("Rua das Cortiças") com o logradouro do cadastro
+-- ("CORTIÇAS, DAS"; "JOAO CIRILO DA SILVA, 1700 - RES. VILA REAL"; "X - PARK COWBOY"): corta
+-- no 1º ", " e no " - " (número, condomínio, artigo invertido), tira tipo de via, preposição,
+-- acento e pontuação. NULL se não sobra nada.
+-- Usado p/ conferir o pino no casamento (src/scrapers/match_anuncio_lote.py).
+CREATE OR REPLACE FUNCTION market.chave_rua(s text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT nullif(regexp_replace(regexp_replace(regexp_replace(
+    split_part(regexp_replace(market.unaccent_bairro(s), '\s+-\s.*$', ''), ',', 1),
+      '^\s*(RUA|R|AVENIDA|AV|AVE|TRAVESSA|TV|TRAV|ALAMEDA|AL|ESTRADA|RODOVIA|ROD|PRACA|VIA|BECO)\.?\s+', ''),
+    '\m(DA|DE|DO|DAS|DOS|E)\M', '', 'g'),
+    '[^A-Z0-9]', '', 'g'), '')
+$$;
+
 -- ───────────────────────── Casamento anúncio → lote (enriquecimento) ─────────────────────────
 CREATE TABLE IF NOT EXISTS market.anuncio_lote (
   anuncio_id bigint REFERENCES market.anuncios(id) ON DELETE CASCADE,
@@ -169,6 +184,9 @@ CREATE TABLE IF NOT EXISTS market.anuncio_lote (
   score      numeric,
   PRIMARY KEY (anuncio_id, lote_id)
 );
+-- A PK começa por anuncio_id: sem este índice o "anúncio do lote" (LATERAL em /lots e nos
+-- tiles) varria a tabela inteira por lote — tile z14 com todos os lotes: 0,8 s → ms.
+CREATE INDEX IF NOT EXISTS idx_anuncio_lote_lote ON market.anuncio_lote (lote_id);
 
 -- ───────────────────────── Comps de mercado (referência de preço, base do VGV) ─────────────────────────
 -- Distinto de market.anuncios: comps são a NUVEM de preços de venda (apto/casa/lote) que

@@ -106,6 +106,7 @@ class AnuncioBP:
     area_anunc_m2: float | None      # terreno: área do lote; casa: área construída
     area_terreno_m2: float | None    # terreno: = área; casa: lida do texto (ou None)
     bairro: str | None
+    logradouro: str | None           # rua anunciada: confere o pino no casamento com o lote
     quartos: int | None
     banheiros: int | None
     suites: int | None
@@ -180,6 +181,7 @@ def from_record(raw: dict) -> AnuncioBP | None:
         area_anunc_m2=area,
         area_terreno_m2=area_terreno,
         bairro=clean_bairro(raw.get("neighborhood")),
+        logradouro=clean_bairro(raw.get("street")),
         # terreno não tem cômodos: o que vier do portal é o default do formulário
         quartos=comodo(raw.get("bedrooms")) if cat == "casa" else None,
         banheiros=comodo(raw.get("bathrooms")) if cat == "casa" else None,

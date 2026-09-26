@@ -54,6 +54,12 @@ def test_comodos_zero_e_terreno_viram_nao_informado():
     assert (c.quartos, c.banheiros, c.suites, c.vagas) == (3, None, None, 0)  # 0 vaga é real
 
 
+def test_rua_anunciada_e_guardada_para_conferir_o_pino():
+    a = from_record(_TERRENO | {"street": "  Rua Iracema  Guedes Lins "})
+    assert a.logradouro == "Rua Iracema Guedes Lins"
+    assert from_record(_TERRENO).logradouro is None
+
+
 def test_casa_area_de_terreno_vem_do_texto():
     casa = _TERRENO | {"type": "Casa", "area_max": 180,
                        "description": "Casa ampla em terreno de 12x30, 3 quartos."}

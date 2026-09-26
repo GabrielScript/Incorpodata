@@ -3,9 +3,14 @@
 Primeiro decide se o pino do anúncio é EXATO ou APROXIMADO. Aproximado quando:
   - o portal marca (approx_location), ou
   - a fonte não expõe precisão (OLX: pino costuma ser o centróide do CEP), ou
-  - o mesmo ponto é compartilhado por 3+ anúncios ativos (centróide de rua/bairro).
+  - o mesmo ponto é compartilhado por 3+ anúncios ativos (centróide de rua/bairro), ou
+  - a rua anunciada existe no cadastro e nenhum lote dela fica a até 100 m do pino.
 Auditoria 2026-09-25: sem essa regra, 3 casas de R$ 0,9–1,3 mi em Muçumagro casavam no
 MESMO lote de 215 m² (pino genérico), e "lote mais próximo" errava a área em 5× na mediana.
+Auditoria 2026-09-26: o Chaves na Mão às vezes manda pino "exato" longe do endereço — casa
+da R. Iracema Guedes Lins com pino a 647 m dali, casada num lote de 7.588 m² de outra rua;
+8% dos casados por ponto do Chaves na Mão ficavam a >300 m da rua anunciada (ZAP: 0,6%).
+Rua anunciada fora do cadastro (grafia diferente, rua nova) não dá p/ conferir: vale o pino.
 
 Métodos, do mais ao menos confiável (score 0–1 = certeza do casamento):
   1. ponto_no_lote — pino exato dentro do polígono. Área anunciada do terreno bate (±25%) →
@@ -25,11 +30,12 @@ from __future__ import annotations
 
 import sys
 
-from sqlalchemy import text
+from sqlalchemy import Connection, text
 
 RAIO_APROX_M = 300.0
 TOL_AREA_APROX = 0.10
 DIST_RUA_M = 15.0
+DIST_PINO_RUA_M = 100.0         # pino mais longe que isso de todo lote da rua anunciada = errado
 PINO_COMPARTILHADO = 3          # anúncios no mesmo ponto → centróide, não endereço
 FONTES_SEM_PRECISAO = ("olx",)
 
@@ -47,6 +53,11 @@ _SQL = [
     ("limpa automáticos", f"""
         DELETE FROM market.anuncio_lote WHERE metodo IN {_sql_in(_METODOS_AUTO)}
     """),
+    ("ruas do cadastro", """
+        CREATE TEMP TABLE _ruas ON COMMIT DROP AS
+        SELECT DISTINCT market.chave_rua(logradouro) AS chave
+        FROM geo.lotes WHERE market.chave_rua(logradouro) IS NOT NULL
+    """),
     ("pinos", f"""
         CREATE TEMP TABLE _pinos ON COMMIT DROP AS
         SELECT a.id, a.geom, a.area_terreno_m2, a.bairro_texto,
@@ -54,8 +65,13 @@ _SQL = [
                (coalesce(a.loc_aproximada, false)
                 OR a.fonte IN {_sql_in(FONTES_SEM_PRECISAO)}
                 OR count(*) OVER (PARTITION BY round(a.lat::numeric, 5), round(a.lon::numeric, 5))
-                   >= {PINO_COMPARTILHADO}) AS aprox
+                   >= {PINO_COMPARTILHADO}
+                OR (r.chave IS NOT NULL AND NOT EXISTS (
+                    SELECT 1 FROM geo.lotes l
+                    WHERE ST_DWithin(l.geom, a.geom, {DIST_PINO_RUA_M})
+                      AND market.chave_rua(l.logradouro) = r.chave))) AS aprox
         FROM market.anuncios a
+        LEFT JOIN _ruas r ON r.chave = market.chave_rua(a.logradouro_texto)
         WHERE a.ativo AND a.geom IS NOT NULL
     """),
     ("ponto_no_lote", f"""
@@ -107,13 +123,16 @@ _SQL = [
 ]
 
 
+def casar_em(conn: Connection) -> dict[str, int]:
+    """Refaz os casamentos automáticos na transação de `conn` (linhas por passo)."""
+    return {nome: conn.execute(text(sql)).rowcount for nome, sql in _SQL}
+
+
 def casar() -> dict[str, int]:
     from src.db.database import get_engine
 
-    out: dict[str, int] = {}
     with get_engine().begin() as conn:
-        for nome, sql in _SQL:
-            out[nome] = conn.execute(text(sql)).rowcount
+        out = casar_em(conn)
         resumo = conn.execute(text(
             """
             SELECT count(*) FILTER (WHERE a.ativo) AS ativos,
@@ -124,7 +143,7 @@ def casar() -> dict[str, int]:
             LEFT JOIN geo.lotes l ON l.id = al.lote_id
             """
         )).one()
-    print("casamento:", {k: v for k, v in out.items() if k not in ("limpa automáticos", "pinos")},
+    print("casamento:", {k: v for k, v in out.items() if k in _METODOS_AUTO},
           f"| ativos {resumo.ativos}, casados {resumo.casados}, em lote vago {resumo.em_vago}")
     return out
 
