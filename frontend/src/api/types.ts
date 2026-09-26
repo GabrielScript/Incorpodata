@@ -21,12 +21,41 @@ export interface Restricao {
   altura_label: string
 }
 
+export type OportunidadeTier = 'rara' | 'boa' | 'incerta' | 'mercado' | 'acima' | 'suspeito'
+
 export interface Listing {
   anuncio_id: number
   fonte: string
+  fontes?: string[]
+  url?: string | null
+  titulo?: string | null
+  tipo?: string | null
+  imagem_url?: string | null
   preco?: number | null
   area_anunc_m2?: number | null
   preco_m2?: number | null
+  preco_m2_terreno?: number | null
+  area_terreno_m2?: number | null
+  quartos?: number | null
+  banheiros?: number | null
+  suites?: number | null
+  vagas?: number | null
+  iptu?: number | null
+  condominio?: number | null
+  anunciante_nome?: string | null
+  anunciante_creci?: string | null
+  coletado_em?: string | null
+  dias_desde_coleta?: number | null
+  loc_aproximada?: boolean | null
+  casamento_metodo?: string | null
+  casamento_score?: number | null
+  preco_esperado?: number | null
+  preco_esperado_lo?: number | null
+  preco_esperado_hi?: number | null
+  desconto_pct?: number | null
+  confiabilidade?: number | null
+  oportunidade_tier?: OportunidadeTier | null
+  oportunidade_modelo?: string | null
 }
 
 export interface VGV {
@@ -92,6 +121,27 @@ export interface LandbankItem {
   area_geom_m2?: number | null
 }
 
+export interface CenarioFinanc {
+  nome: 'mercado' | 'regulada' | string
+  taxa_aa_pct: number
+  data_ref: string
+  fonte?: string | null
+  parcela_sac_inicial: number
+  parcela_sac_final: number
+  parcela_price: number
+  renda_minima: number
+  renda_minima_mais_1pp: number
+}
+
+export interface Financiamento {
+  unidade_area_m2: number
+  unidade_valor: number
+  entrada_pct: number
+  prazo_meses: number
+  cenarios: CenarioFinanc[]
+  premissas: string
+}
+
 export interface LotFicha {
   id: number
   inscricao?: string | null
@@ -115,6 +165,7 @@ export interface LotFicha {
   residual_bloqueado?: boolean
   score?: Score | null
   score_bloqueado?: boolean
+  financiamento?: Financiamento | null
 }
 
 export interface Oportunidade {
@@ -141,5 +192,8 @@ export interface LotProperties {
   sigla?: string | null
   a_venda: boolean
   preco?: number | null
-  preco_m2?: number | null
+  preco_m2?: number | null // R$/m² do terreno (preço ÷ área do lote)
+  anuncio_categoria?: 'terreno' | 'casa' | null
+  oportunidade_tier?: OportunidadeTier | null
+  desconto_pct?: number | null
 }

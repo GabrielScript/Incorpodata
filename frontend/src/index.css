@@ -142,6 +142,10 @@ button {
 .legend .sw.vago {
   background: #7c878d;
 }
+.legend .sw.contorno {
+  background: transparent;
+  border-width: 3px;
+}
 .legend .sw.venda {
   background: var(--venda);
 }
@@ -498,6 +502,16 @@ button {
 .row-price-m2 {
   color: var(--muted);
   font-weight: 400;
+}
+.row-anuncio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.row-anuncio .tier {
+  font-size: 11px;
+  padding: 1px 7px;
 }
 .term {
   text-decoration: underline dotted;
@@ -894,4 +908,127 @@ button {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ───────── Ficha: anúncio à venda (camada BestPlaces) ───────── */
+.anuncio {
+  margin: 12px 0;
+  padding: 12px;
+  border: 2px solid #d99a00;
+  border-radius: var(--radius);
+  background: #fffaf0;
+}
+.anuncio-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.anuncio-h h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.anuncio-foto {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  margin: 8px 0;
+}
+.anuncio-preco {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+.anuncio-exp {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.anuncio-attrs {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 10px;
+  margin: 8px 0 10px;
+  font-size: 13px;
+}
+.anuncio-attrs dt {
+  color: var(--muted);
+}
+.anuncio-attrs dd {
+  margin: 0;
+}
+/* Selos: texto escuro sobre fundo claro (contraste AA). */
+.tier {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.tier-rara { background: #dcfce7; color: #14532d; border-color: #16a34a; }
+.tier-boa { background: #ecfdf5; color: #065f46; border-color: #10b981; }
+.tier-incerta { background: #eff6ff; color: #1e3a8a; border-color: #60a5fa; }
+.tier-mercado { background: #f1f5f9; color: #334155; border-color: #94a3b8; }
+.tier-acima { background: #fffbeb; color: #78350f; border-color: #f59e0b; }
+.tier-suspeito { background: #fef2f2; color: #7f1d1d; border-color: #ef4444; }
+
+/* ───────── Seletor "Personalizar ficha" ───────── */
+.campos-picker {
+  margin: 6px 0 4px;
+}
+.btn.small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.campos-painel {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  max-height: 340px;
+  overflow: auto;
+}
+.campos-painel fieldset {
+  border: 0;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+}
+.campos-painel legend {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: var(--accent-ink);
+}
+.campos-dica {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.campos-acoes {
+  display: flex;
+  gap: 6px;
+}
+
+/* ───────── Ficha: financiamento (BCB) ───────── */
+.financ-cenario {
+  margin: 6px 0 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.financ-h {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.section .nota {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 6px 0 0;
 }

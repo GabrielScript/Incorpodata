@@ -44,6 +44,7 @@ export type LotSort =
 export interface LotFilters {
   bairro: string // '' = todos os bairros
   onlyVacant: boolean
+  aVenda: boolean // só lotes com anúncio ativo casado (terreno ou casa); com onlyVacant = o alvo
   areaMin: string // texto do input; vazio = sem limite
   areaMax: string
   sort: LotSort
@@ -71,6 +72,7 @@ export function listLots(f: LotFilters): Promise<LotCollection> {
   const p = new URLSearchParams({
     bairro: f.bairro,
     only_vacant: String(f.onlyVacant),
+    a_venda: String(f.aVenda),
     sort: f.sort,
   })
   if (f.areaMin.trim()) p.set('area_min', f.areaMin.trim())

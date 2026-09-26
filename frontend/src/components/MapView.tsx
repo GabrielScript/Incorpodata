@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import type { FeatureCollection, Geometry } from 'geojson'
 import type {
@@ -31,6 +31,9 @@ const STYLE: StyleSpecification = {
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
+      // Em JP o World_Imagery tem tile real até z19; de z20 pra cima devolve HTTP 200 com o
+      // placeholder cinza "Map data not yet available" (mapa todo cinza no zoom alto).
+      maxzoom: 19,
       attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
     },
   },
@@ -40,19 +43,46 @@ const STYLE: StyleSpecification = {
   ],
 }
 
+// Estado do lote p/ a cor: vago + à venda (o alvo: destaque especial) > à venda construído
+// (casa: terreno "disfarçado") > vago > construído.
+const A_VENDA: ExpressionSpecification = ['boolean', ['get', 'a_venda'], false]
+const VAGO: ExpressionSpecification = ['==', ['get', 'tipo'], 'TERRITORIAL']
+export const COR_LOTE = {
+  vagoVenda: '#d99a00',
+  venda: '#e0661f',
+  vago: '#7c878d',
+  construido: '#b7bec2',
+  oportunidade: '#11845b',
+} as const
+const FILL_COLOR: ExpressionSpecification = [
+  'case',
+  ['all', A_VENDA, VAGO], COR_LOTE.vagoVenda,
+  A_VENDA, COR_LOTE.venda,
+  VAGO, COR_LOTE.vago,
+  COR_LOTE.construido,
+]
+// Preço pedido abaixo do esperado (selo do anúncio) → contorno verde por cima.
+const ABAIXO_MERCADO: ExpressionSpecification = [
+  'in', ['coalesce', ['get', 'oportunidade_tier'], ''], ['literal', ['rara', 'boa', 'incerta']],
+]
+
 // Paint do lote, reusado no addLayer e no toggle (fonte única — não duplicar expressão).
 // No mapa: cheio e colorido (legibilidade). No satélite: quase só contorno branco, pra a
-// imagem do terreno aparecer por baixo do polígono.
+// imagem do terreno aparecer por baixo do polígono — menos o à venda, que segue pintado.
 const FILL_MAP: ExpressionSpecification = [
   'case',
   ['boolean', ['feature-state', 'selected'], false],
   0.6,
+  A_VENDA,
+  0.55,
   0.22,
 ]
 const FILL_SAT: ExpressionSpecification = [
   'case',
   ['boolean', ['feature-state', 'selected'], false],
   0.18,
+  A_VENDA,
+  0.45,
   0,
 ]
 const LINE_COLOR_MAP: ExpressionSpecification = [
@@ -75,6 +105,7 @@ const LINE_WIDTH_SAT: ExpressionSpecification = [
 ]
 
 const BANCARIOS: [number, number] = [-34.834, -7.142] // [lng, lat]
+const MAX_ZOOM = 20
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
 
 interface Props {
@@ -99,6 +130,21 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
   const selIdRef = useRef(selectedId)
   const centerRef = useRef(selectedCenter)
   const [satellite, setSatellite] = useState(false)
+  // Legenda só com o que existe no recorte (antes era fixa em "Vago", mesmo com construídos).
+  const legenda = useMemo(() => {
+    const l = { vagoVenda: false, venda: false, oportunidade: false, vago: false, construido: false }
+    for (const f of data?.features ?? []) {
+      const p = f.properties as { a_venda?: boolean; tipo?: string; oportunidade_tier?: string | null } | null
+      const vago = p?.tipo === 'TERRITORIAL'
+      if (p?.a_venda) {
+        if (vago) l.vagoVenda = true
+        else l.venda = true
+        if (p.oportunidade_tier && ['rara', 'boa', 'incerta'].includes(p.oportunidade_tier)) l.oportunidade = true
+      } else if (vago) l.vago = true
+      else l.construido = true
+    }
+    return l
+  }, [data])
   useEffect(() => {
     onSelectRef.current = onSelect
     dataRef.current = data
@@ -145,6 +191,8 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
       style: STYLE,
       center: BANCARIOS,
       zoom: 14,
+      // Teto de zoom: 1 nível acima do último tile real (z19) — ampliado, sem virar cinza.
+      maxZoom: MAX_ZOOM,
       attributionControl: { compact: true },
     })
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left')
@@ -156,7 +204,7 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
         type: 'fill',
         source: 'lots',
         paint: {
-          'fill-color': '#7c878d',
+          'fill-color': FILL_COLOR,
           'fill-opacity': FILL_MAP,
         },
       })
@@ -167,6 +215,17 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
         paint: {
           'line-color': LINE_COLOR_MAP,
           'line-width': LINE_WIDTH_MAP,
+        },
+      })
+      // Contorno do à venda por cima (vago+à venda mais grosso; verde se abaixo do mercado).
+      m.addLayer({
+        id: 'lots-venda-line',
+        type: 'line',
+        source: 'lots',
+        filter: A_VENDA,
+        paint: {
+          'line-color': ['case', ABAIXO_MERCADO, COR_LOTE.oportunidade, ['case', VAGO, COR_LOTE.vagoVenda, COR_LOTE.venda]],
+          'line-width': ['case', VAGO, 3, 2],
         },
       })
       readyRef.current = true
@@ -259,10 +318,33 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
           Satélite
         </button>
       </div>
-      <div className="legend">
-        <span>
-          <i className="sw vago" /> Vago
-        </span>
+      <div className="legend" aria-label="Legenda do mapa">
+        {legenda.vagoVenda && (
+          <span>
+            <i className="sw" style={{ background: COR_LOTE.vagoVenda }} /> Vago à venda
+          </span>
+        )}
+        {legenda.venda && (
+          <span>
+            <i className="sw" style={{ background: COR_LOTE.venda }} /> À venda (casa)
+          </span>
+        )}
+        {legenda.oportunidade && (
+          <span>
+            <i className="sw contorno" style={{ borderColor: COR_LOTE.oportunidade }} /> Abaixo do
+            mercado
+          </span>
+        )}
+        {legenda.vago && (
+          <span>
+            <i className="sw" style={{ background: COR_LOTE.vago }} /> Vago
+          </span>
+        )}
+        {legenda.construido && (
+          <span>
+            <i className="sw" style={{ background: COR_LOTE.construido }} /> Construído
+          </span>
+        )}
       </div>
     </div>
   )

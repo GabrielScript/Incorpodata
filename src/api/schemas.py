@@ -27,12 +27,41 @@ class Restricao(BaseModel):
 
 
 class Listing(BaseModel):
+    """Anúncio casado ao lote (camada "À venda"). LGPD: telefone nunca é guardado nem exposto;
+    a url é o link público do anúncio no portal (o contato fica lá, sob as regras do portal)."""
     anuncio_id: int
     fonte: str
+    fontes: list[str] = []            # portais onde o mesmo imóvel aparece
+    url: str | None = None
+    titulo: str | None = None
+    tipo: str | None = None           # Terreno / Lote | Casa | ...
+    imagem_url: str | None = None
     preco: float | None = None
     area_anunc_m2: float | None = None
-    preco_m2: float | None = None
-    # url NÃO exposta aqui (LGPD): revelar contato sob demanda em endpoint próprio.
+    preco_m2: float | None = None     # preço ÷ área anunciada (casa: área construída)
+    preco_m2_terreno: float | None = None  # preço ÷ área do LOTE casado (comparável entre terrenos)
+    area_terreno_m2: float | None = None
+    quartos: int | None = None
+    banheiros: int | None = None
+    suites: int | None = None
+    vagas: int | None = None
+    iptu: float | None = None
+    condominio: float | None = None
+    anunciante_nome: str | None = None
+    anunciante_creci: str | None = None
+    coletado_em: str | None = None    # ISO da coleta no portal
+    dias_desde_coleta: int | None = None
+    loc_aproximada: bool | None = None
+    casamento_metodo: str | None = None   # ponto_no_lote | ponto_proximo | area_raio | manual
+    casamento_score: float | None = None  # 0–1: certeza de que o anúncio é deste lote
+    # Oportunidade: preço pedido × esperado (hedônico p/ terreno, LightGBM do BestPlaces p/ casa)
+    preco_esperado: float | None = None
+    preco_esperado_lo: float | None = None
+    preco_esperado_hi: float | None = None
+    desconto_pct: float | None = None     # (esperado − pedido)/esperado; >0 = abaixo do mercado
+    confiabilidade: float | None = None
+    oportunidade_tier: str | None = None  # rara | boa | incerta | mercado | acima | suspeito
+    oportunidade_modelo: str | None = None
 
 
 class VGV(BaseModel):
@@ -91,6 +120,28 @@ class Score(BaseModel):
     nota_metodo: str
 
 
+class CenarioFinanc(BaseModel):
+    nome: str                     # mercado (SFI) | regulada (SFH/FGTS)
+    taxa_aa_pct: float
+    data_ref: str                 # mês da taxa no BCB (ISO)
+    fonte: str | None = None      # 'BCB SGS 20772'
+    parcela_sac_inicial: float
+    parcela_sac_final: float
+    parcela_price: float
+    renda_minima: float           # renda familiar p/ 1ª parcela SAC ≤ 30% da renda
+    renda_minima_mais_1pp: float  # sensibilidade: juro +1 p.p.
+
+
+class Financiamento(BaseModel):
+    """Demanda solvável: quem consegue comprar a unidade típica que sai deste terreno."""
+    unidade_area_m2: float
+    unidade_valor: float          # R$/m² de referência do lote × área típica
+    entrada_pct: float
+    prazo_meses: int
+    cenarios: list[CenarioFinanc]
+    premissas: str
+
+
 class LotFicha(BaseModel):
     id: int
     inscricao: str | None = None
@@ -117,6 +168,7 @@ class LotFicha(BaseModel):
     residual_bloqueado: bool = False
     score: Score | None = None
     score_bloqueado: bool = False
+    financiamento: Financiamento | None = None
 
 
 class Oportunidade(BaseModel):

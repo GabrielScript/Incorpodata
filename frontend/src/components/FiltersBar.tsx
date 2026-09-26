@@ -62,6 +62,14 @@ export function FiltersBar({ bairros, value, onChange }: Props) {
             <option value="proj_desc">maior → menor</option>
             <option value="proj_asc">menor → maior</option>
           </optgroup>
+          {value.aVenda && (
+            <optgroup label="Preço pedido">
+              <option value="preco_asc">menor → maior</option>
+              <option value="preco_desc">maior → menor</option>
+              <option value="preco_m2_asc">R$/m² do terreno: menor → maior</option>
+              <option value="preco_m2_desc">R$/m² do terreno: maior → menor</option>
+            </optgroup>
+          )}
         </select>
       </label>
 
@@ -72,6 +80,20 @@ export function FiltersBar({ bairros, value, onChange }: Props) {
           onChange={(e) => set({ onlyVacant: e.target.checked })}
         />
         Só vagos
+      </label>
+
+      <label className="check" title="Lotes com anúncio ativo (terreno ou casa) coletado nos portais">
+        <input
+          type="checkbox"
+          checked={value.aVenda}
+          onChange={(e) => {
+            const aVenda = e.target.checked
+            // ordenação por preço só existe com anúncio: desligou → volta pra padrão
+            const sort = !aVenda && value.sort.startsWith('preco') ? 'none' : value.sort
+            set({ aVenda, sort })
+          }}
+        />
+        À venda
       </label>
     </div>
   )

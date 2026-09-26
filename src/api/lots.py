@@ -14,6 +14,8 @@ from src.api.pdf import build_ficha_pdf
 from src.api.plans import limits_for
 from src.api.schemas import (
     VGV,
+    CenarioFinanc,
+    Financiamento,
     Listing,
     LotFicha,
     Oportunidade,
@@ -22,6 +24,13 @@ from src.api.schemas import (
     Score,
     Viability,
 )
+from src.api.financiamento import (
+    AREA_UNIDADE_TIPICA_M2,
+    ENTRADA_PCT_PADRAO,
+    PRAZO_MESES_PADRAO,
+    simular,
+)
+from src.scrapers.bestplaces import categoria, comodo
 from src.api.viability import (
     AREA_LOTE_SUSPEITA_M2,
     PrecoStats,
@@ -40,6 +49,15 @@ router = APIRouter(prefix="/api", tags=["lots"])
 # envelhece e um lote "à venda" já vendido queima credibilidade. Schema, scraper e casamento
 # continuam existindo; religar = ANUNCIOS_ATIVOS=1 quando houver frescor garantido.
 ANUNCIOS_ATIVOS = os.getenv("ANUNCIOS_ATIVOS", "0").strip().lower() in {"1", "true", "sim"}
+# Frescor: anúncio coletado há mais que isso não aparece como "à venda" (pode ter sido vendido).
+ANUNCIO_MAX_DIAS = int(os.getenv("ANUNCIO_MAX_DIAS", "45"))
+# Casamento anúncio→lote abaixo deste score (area_raio fraco) não pinta o lote como à venda.
+CASAMENTO_SCORE_MIN = float(os.getenv("CASAMENTO_SCORE_MIN", "0.4"))
+
+# Predicado SQL do anúncio "vivo" (alias a) e do casamento aceitável (alias da tabela de vínculo).
+_ANUNCIO_VIVO = (
+    "a.ativo AND coalesce(a.scraped_at, a.ultimo_visto) > now() - make_interval(days => :max_dias)"
+)
 
 # Teto de lotes por request do mapa. Cobre TODOS os vagos de JP (23.682 em 09/2026, 64 bairros)
 # e o maior bairro com construídos (17.744) — "Todos os bairros" mostra a cidade inteira. Só
@@ -101,17 +119,21 @@ def list_lots(
         SELECT l.id, l.logradouro, l.bairro, l.tipo, l.area_geom_m2, lz.sigla,
                lz.area_projecao_max_m2,
                (al.anuncio_id IS NOT NULL) AS a_venda, al.preco, al.preco_m2,
+               al.anuncio_tipo, al.oportunidade_tier, al.desconto_pct,
                ST_AsGeoJSON(ST_Transform(l.geom, 4326), 6) AS geojson
         FROM geo.lotes l
         LEFT JOIN geo.lote_zona lz ON lz.lote_id = l.id
         LEFT JOIN LATERAL (
-            SELECT a.id AS anuncio_id, a.preco, a.preco_m2
+            -- R$/m² do TERRENO (preço ÷ área do lote): comparável entre terreno e casa.
+            SELECT a.id AS anuncio_id, a.preco,
+                   a.preco / nullif(l.area_geom_m2, 0) AS preco_m2,
+                   a.tipo AS anuncio_tipo, a.oportunidade_tier, a.desconto_pct
             FROM market.anuncio_lote al2
-            JOIN market.anuncios a ON a.id = al2.anuncio_id AND a.ativo
-            WHERE al2.lote_id = l.id
-            ORDER BY al2.score DESC NULLS LAST
+            JOIN market.anuncios a ON a.id = al2.anuncio_id AND {_ANUNCIO_VIVO}
+            WHERE al2.lote_id = l.id AND coalesce(al2.score, 1) >= :score_min
+            ORDER BY al2.score DESC NULLS LAST, a.scraped_at DESC NULLS LAST
             LIMIT 1
-        ) al ON true
+        ) al ON :anuncios_ativos
         WHERE (:bairro = '' OR l.bairro ILIKE :bairro)
           AND (NOT :only_vacant OR l.tipo = 'TERRITORIAL')
           AND (NOT :a_venda OR al.anuncio_id IS NOT NULL)
@@ -129,6 +151,9 @@ def list_lots(
             "area_min": area_min,
             "area_max": area_max,
             "limit": limit + 1,  # 1 a mais que o teto = sabe se cortou sem um COUNT(*) à parte
+            "anuncios_ativos": ANUNCIOS_ATIVOS,
+            "max_dias": ANUNCIO_MAX_DIAS,
+            "score_min": CASAMENTO_SCORE_MIN,
         },
     ).mappings().all()
     truncado = len(rows) > limit
@@ -149,9 +174,12 @@ def list_lots(
             "area_projecao_max_m2": _f(r["area_projecao_max_m2"]),
             "geometria_suspeita": geometria_suspeita(_f(r["area_geom_m2"])),
             "sigla": r["sigla"],
-            "a_venda": bool(r["a_venda"]) and ANUNCIOS_ATIVOS,
-            "preco": _f(r["preco"]) if ANUNCIOS_ATIVOS else None,
-            "preco_m2": _f(r["preco_m2"]) if ANUNCIOS_ATIVOS else None,
+            "a_venda": bool(r["a_venda"]),
+            "preco": _f(r["preco"]),
+            "preco_m2": _f(r["preco_m2"]),
+            "anuncio_categoria": categoria(r["anuncio_tipo"]),
+            "oportunidade_tier": r["oportunidade_tier"],
+            "desconto_pct": _f(r["desconto_pct"]),
         }
         features.append(
             f'{{"type":"Feature","id":{int(r["id"])},"geometry":{r["geojson"]},'
@@ -191,16 +219,26 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
     if ANUNCIOS_ATIVOS:
         lrow = conn.execute(
             text(
-                """
-                SELECT a.id AS anuncio_id, a.fonte, a.preco, a.area_anunc_m2, a.preco_m2
+                f"""
+                SELECT a.id AS anuncio_id, a.fonte, a.fontes, a.url, a.titulo, a.tipo,
+                       a.imagem_url, a.preco, a.area_anunc_m2, a.preco_m2,
+                       a.preco / nullif(l.area_geom_m2, 0) AS preco_m2_terreno,
+                       a.area_terreno_m2, a.quartos, a.banheiros, a.suites, a.vagas,
+                       a.iptu, a.condominio, a.anunciante_nome, a.anunciante_creci,
+                       a.scraped_at, a.loc_aproximada,
+                       extract(day FROM now() - a.scraped_at)::int AS dias,
+                       al.metodo, al.score, a.preco_esperado, a.preco_esperado_lo,
+                       a.preco_esperado_hi, a.desconto_pct, a.confiabilidade,
+                       a.oportunidade_tier, a.oportunidade_modelo
                 FROM market.anuncio_lote al
-                JOIN market.anuncios a ON a.id = al.anuncio_id AND a.ativo
-                WHERE al.lote_id = :id
-                ORDER BY al.score DESC NULLS LAST
+                JOIN market.anuncios a ON a.id = al.anuncio_id AND {_ANUNCIO_VIVO}
+                JOIN geo.lotes l ON l.id = al.lote_id
+                WHERE al.lote_id = :id AND coalesce(al.score, 1) >= :score_min
+                ORDER BY al.score DESC NULLS LAST, a.scraped_at DESC NULLS LAST
                 LIMIT 1
                 """
             ),
-            {"id": lot_id},
+            {"id": lot_id, "max_dias": ANUNCIO_MAX_DIAS, "score_min": CASAMENTO_SCORE_MIN},
         ).mappings().first()
 
     viability = None
@@ -230,12 +268,41 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
 
     listing = None
     if lrow is not None:
+        # terreno não tem cômodos (o 0 é default do portal); vale também p/ o que já está no banco
+        eh_casa = categoria(lrow["tipo"]) == "casa"
         listing = Listing(
             anuncio_id=lrow["anuncio_id"],
             fonte=lrow["fonte"],
+            fontes=list(lrow["fontes"] or []),
+            url=lrow["url"],
+            titulo=lrow["titulo"],
+            tipo=lrow["tipo"],
+            imagem_url=lrow["imagem_url"],
             preco=_f(lrow["preco"]),
             area_anunc_m2=_f(lrow["area_anunc_m2"]),
             preco_m2=_f(lrow["preco_m2"]),
+            preco_m2_terreno=_f(lrow["preco_m2_terreno"]),
+            area_terreno_m2=_f(lrow["area_terreno_m2"]),
+            quartos=comodo(lrow["quartos"]) if eh_casa else None,
+            banheiros=comodo(lrow["banheiros"]) if eh_casa else None,
+            suites=comodo(lrow["suites"]) if eh_casa else None,
+            vagas=lrow["vagas"] if eh_casa else None,
+            iptu=_f(lrow["iptu"]),
+            condominio=_f(lrow["condominio"]),
+            anunciante_nome=lrow["anunciante_nome"],
+            anunciante_creci=lrow["anunciante_creci"],
+            coletado_em=lrow["scraped_at"].isoformat() if lrow["scraped_at"] else None,
+            dias_desde_coleta=lrow["dias"],
+            loc_aproximada=lrow["loc_aproximada"],
+            casamento_metodo=lrow["metodo"],
+            casamento_score=_f(lrow["score"]),
+            preco_esperado=_f(lrow["preco_esperado"]),
+            preco_esperado_lo=_f(lrow["preco_esperado_lo"]),
+            preco_esperado_hi=_f(lrow["preco_esperado_hi"]),
+            desconto_pct=_f(lrow["desconto_pct"]),
+            confiabilidade=_f(lrow["confiabilidade"]),
+            oportunidade_tier=lrow["oportunidade_tier"],
+            oportunidade_modelo=lrow["oportunidade_modelo"],
         )
 
     # VGV: envelope (projeção térreo) × R$/m² mediano de APARTAMENTO (comps de venda).
@@ -386,6 +453,8 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
                 ),
             )
 
+    financiamento = _financiamento(conn, ref.preco_m2) if ref is not None else None
+
     centroid = [row["lng"], row["lat"]] if row["lng"] is not None else None
     return LotFicha(
         id=row["id"],
@@ -407,6 +476,53 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
         vgv=vgv,
         residual=residual,
         score=score,
+        financiamento=financiamento,
+    )
+
+
+_SERIES_FINANC = {"mercado": "financ_imob_pf_mercado_aa", "regulada": "financ_imob_pf_regulada_aa"}
+
+
+def _financiamento(conn: Connection, preco_m2: float) -> Financiamento | None:
+    """Cenários de financiamento da unidade típica com as taxas mais recentes do BCB."""
+    rows = conn.execute(
+        text(
+            """
+            SELECT DISTINCT ON (serie) serie, data, valor, fonte
+            FROM market.indicadores WHERE serie = ANY(:s)
+            ORDER BY serie, data DESC
+            """
+        ),
+        {"s": list(_SERIES_FINANC.values())},
+    ).mappings().all()
+    by = {r["serie"]: r for r in rows}
+    valor = preco_m2 * AREA_UNIDADE_TIPICA_M2
+    cenarios = []
+    for nome, serie in _SERIES_FINANC.items():
+        r = by.get(serie)
+        if r is None:
+            continue
+        s = simular(valor, float(r["valor"]))
+        cenarios.append(CenarioFinanc(
+            nome=nome, taxa_aa_pct=s.taxa_aa_pct, data_ref=r["data"].isoformat(), fonte=r["fonte"],
+            parcela_sac_inicial=s.parcela_sac_inicial, parcela_sac_final=s.parcela_sac_final,
+            parcela_price=s.parcela_price, renda_minima=s.renda_minima,
+            renda_minima_mais_1pp=s.renda_minima_mais_1pp,
+        ))
+    if not cenarios:
+        return None
+    return Financiamento(
+        unidade_area_m2=AREA_UNIDADE_TIPICA_M2,
+        unidade_valor=valor,
+        entrada_pct=ENTRADA_PCT_PADRAO,
+        prazo_meses=PRAZO_MESES_PADRAO,
+        cenarios=cenarios,
+        premissas=(
+            f"Unidade típica de {AREA_UNIDADE_TIPICA_M2:.0f} m² ao R$/m² de referência do lote; "
+            f"entrada {ENTRADA_PCT_PADRAO:.0%}, {PRAZO_MESES_PADRAO // 12} anos, SAC; renda mínima = "
+            f"1ª parcela ≤ 30% da renda. Sem seguros (MIP/DFI) e tarifas: parcela real ~5–10% maior. "
+            f"Taxa regulada vale só p/ imóvel e renda dentro das regras do SFH/FGTS."
+        ),
     )
 
 
