@@ -2,7 +2,9 @@
 # que só é usado nos pipelines de carga, não na API. Mantém a imagem pequena e o build rápido.
 
 # DB
-SQLAlchemy>=2.0
+# <2.1: o 2.1 trocou o driver padrão de postgresql:// p/ psycopg (v3) -> ModuleNotFoundError
+# com só psycopg2 na imagem (rev 00025 deu 500 em tudo que toca o banco, 25/09/2026).
+SQLAlchemy>=2.0,<2.1
 psycopg2-binary>=2.9
 
 # API

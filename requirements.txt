@@ -5,7 +5,7 @@ pyproj>=3.6
 fiona>=1.9
 
 # DB
-SQLAlchemy>=2.0
+SQLAlchemy>=2.0,<2.1  # 2.1 muda o driver padrão p/ psycopg v3 (ver requirements-api.txt)
 GeoAlchemy2>=0.15
 psycopg2-binary>=2.9
 
