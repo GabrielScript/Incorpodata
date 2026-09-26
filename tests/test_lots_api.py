@@ -119,6 +119,56 @@ def test_lote_a_venda_traz_categoria_e_selo(api, monkeypatch):
     assert conn.params["a_venda"] is True
 
 
+class _FakeTileConn:
+    """Guarda SQL e parâmetros; devolve bytes no lugar do ST_AsMVT."""
+
+    def __init__(self, mvt: bytes | None):
+        self.mvt = mvt
+        self.sql = ""
+        self.params: dict = {}
+
+    def execute(self, sql, params):
+        self.sql, self.params = str(sql), params
+        return self
+
+    def scalar(self):
+        return self.mvt
+
+
+@pytest.fixture
+def tiles():
+    def usar(mvt: bytes | None = b"\x1a\x05lotes") -> tuple[TestClient, _FakeTileConn]:
+        conn = _FakeTileConn(mvt)
+        app.dependency_overrides[get_conn] = lambda: conn
+        return TestClient(app), conn
+
+    yield usar
+    app.dependency_overrides.pop(get_conn, None)
+
+
+def test_tile_mvt_com_os_mesmos_filtros_da_lista(tiles):
+    import src.api.lots as lots
+
+    client, conn = tiles()
+    r = client.get("/api/tiles/lotes/14/6605/8517.pbf",
+                   params={"bairro": "BESSA", "only_vacant": "false", "a_venda": "true", "area_min": 300})
+    assert r.status_code == 200 and r.content == b"\x1a\x05lotes"
+    assert r.headers["content-type"] == "application/vnd.mapbox-vector-tile"
+    assert "max-age" in r.headers["cache-control"]
+    assert {"z": 14, "x": 6605, "y": 8517}.items() <= conn.params.items()
+    assert conn.params["bairro"] == "BESSA" and conn.params["only_vacant"] is False
+    assert conn.params["a_venda"] is True and conn.params["area_min"] == 300
+    assert "limit" not in conn.params  # tile não tem teto: a cidade inteira aparece
+    assert lots._LOTES_FILTRADOS in conn.sql  # mesmo recorte da lista, por construção
+
+
+def test_tile_vazio_e_fora_da_faixa(tiles):
+    client, _ = tiles(None)
+    assert client.get("/api/tiles/lotes/16/26421/34068.pbf").content == b""
+    assert client.get("/api/tiles/lotes/12/1651/2129.pbf").status_code == 422  # z12 ≈ a cidade: GeoJSON
+    assert client.get("/api/tiles/lotes/13/8192/0.pbf").status_code == 404  # fora da grade 2^13
+
+
 def test_resposta_grande_sai_comprimida(api):
     # ~13 MB crus p/ a cidade inteira; o Cloud Run não comprime sozinho
     client, _ = api(2_000)

@@ -68,17 +68,28 @@ export const listBairros = () => json<string[]>(`${BASE}/bairros`)
 /** GeoJSON dos lotes + `truncado`: o recorte passou do teto da API e veio cortado. */
 export type LotCollection = FeatureCollection & { truncado?: boolean }
 
-export function listLots(f: LotFilters): Promise<LotCollection> {
+/** Recorte dos filtros (sem a ordenação): o que a lista e os tiles do mapa têm em comum. */
+function recorteParams(f: Omit<LotFilters, 'sort'>): URLSearchParams {
   const p = new URLSearchParams({
     bairro: f.bairro,
     only_vacant: String(f.onlyVacant),
     a_venda: String(f.aVenda),
-    sort: f.sort,
   })
   if (f.areaMin.trim()) p.set('area_min', f.areaMin.trim())
   if (f.areaMax.trim()) p.set('area_max', f.areaMax.trim())
+  return p
+}
+
+export function listLots(f: LotFilters): Promise<LotCollection> {
+  const p = recorteParams(f)
+  p.set('sort', f.sort)
   return json<LotCollection>(`${BASE}/lots?${p.toString()}`)
 }
+
+/** URL-modelo dos tiles vetoriais (MVT) dos lotes no recorte dos filtros. Absoluta: o worker do
+ *  MapLibre não resolve URL relativa. Sem `sort`: reordenar a lista não invalida o cache. */
+export const lotTilesUrl = (f: Omit<LotFilters, 'sort'>) =>
+  `${window.location.origin}${BASE}/tiles/lotes/{z}/{x}/{y}.pbf?${recorteParams(f).toString()}`
 
 export const getLot = (id: number) => json<LotFicha>(`${BASE}/lots/${id}`)
 

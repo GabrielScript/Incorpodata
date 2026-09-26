@@ -6,6 +6,7 @@ import type {
   GeoJSONSource,
   Map as MLMap,
   StyleSpecification,
+  VectorTileSource,
 } from 'maplibre-gl'
 
 // Dois basemaps SEM chave, alternáveis: Esri World Street Map (ruas) e Esri World Imagery
@@ -104,12 +105,29 @@ const LINE_WIDTH_SAT: ExpressionSpecification = [
   1.2,
 ]
 
+// Duas fontes de polígono de lote, com as mesmas camadas: abaixo do z13, o GeoJSON da lista
+// (como antes); do z13 pra cima, os tiles vetoriais da API — a cidade inteira, sem o teto de
+// lotes da lista. Um tile z12 teria ~110 mil lotes (1,3 MB), daí o corte. Zooms iguais aos
+// TILE_MIN_ZOOM/TILE_MAX_ZOOM de src/api/lots.py; acima do z16 o MapLibre amplia o z16.
+const TILE_MIN_ZOOM = 13
+const TILE_MAX_ZOOM = 16
+interface FonteLote {
+  source: string
+  sourceLayer?: string
+  zoom: { minzoom?: number; maxzoom?: number }
+}
+const FONTE_LISTA: FonteLote = { source: 'lots', zoom: { maxzoom: TILE_MIN_ZOOM } }
+const FONTE_TILES: FonteLote = { source: 'lots-tiles', sourceLayer: 'lotes', zoom: { minzoom: TILE_MIN_ZOOM } }
+const FONTES = [FONTE_LISTA, FONTE_TILES]
+
 const BANCARIOS: [number, number] = [-34.834, -7.142] // [lng, lat]
 const MAX_ZOOM = 20
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
 
 interface Props {
   data: FeatureCollection | null
+  /** URL-modelo ({z}/{x}/{y}) dos tiles vetoriais com o mesmo recorte de `data`. */
+  tilesUrl: string
   selectedId: number | null
   /** Centroide [lng, lat] do lote selecionado (da ficha): localiza o lote quando o polígono
    *  dele não está no recorte carregado (outro bairro/filtro). */
@@ -117,7 +135,7 @@ interface Props {
   onSelect: (id: number) => void
 }
 
-export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
+export function MapView({ data, tilesUrl, selectedId, selectedCenter, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const readyRef = useRef(false)
@@ -127,6 +145,7 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
   // Últimas props, p/ os handlers do mapa (criados uma vez) não lerem valor velho.
   const onSelectRef = useRef(onSelect)
   const dataRef = useRef(data)
+  const tilesUrlRef = useRef(tilesUrl)
   const selIdRef = useRef(selectedId)
   const centerRef = useRef(selectedCenter)
   const [satellite, setSatellite] = useState(false)
@@ -148,15 +167,18 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
   useEffect(() => {
     onSelectRef.current = onSelect
     dataRef.current = data
+    tilesUrlRef.current = tilesUrl
     selIdRef.current = selectedId
     centerRef.current = selectedCenter
   })
 
-  // Destaque do lote selecionado (feature-state; sobrevive a setData).
+  // Destaque do lote selecionado nas duas fontes (feature-state; sobrevive a setData/setTiles).
   function paintSelected(m: MLMap) {
-    if (selRef.current != null) m.removeFeatureState({ source: 'lots', id: selRef.current })
-    if (selIdRef.current != null) {
-      m.setFeatureState({ source: 'lots', id: selIdRef.current }, { selected: true })
+    for (const { source, sourceLayer } of FONTES) {
+      if (selRef.current != null) m.removeFeatureState({ source, sourceLayer, id: selRef.current })
+      if (selIdRef.current != null) {
+        m.setFeatureState({ source, sourceLayer, id: selIdRef.current }, { selected: true })
+      }
     }
     selRef.current = selIdRef.current
   }
@@ -198,36 +220,14 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left')
 
     m.on('load', () => {
-      m.addSource('lots', { type: 'geojson', data: EMPTY })
-      m.addLayer({
-        id: 'lots-fill',
-        type: 'fill',
-        source: 'lots',
-        paint: {
-          'fill-color': FILL_COLOR,
-          'fill-opacity': FILL_MAP,
-        },
+      m.addSource(FONTE_LISTA.source, { type: 'geojson', data: EMPTY })
+      m.addSource(FONTE_TILES.source, {
+        type: 'vector',
+        tiles: [tilesUrlRef.current],
+        minzoom: TILE_MIN_ZOOM,
+        maxzoom: TILE_MAX_ZOOM,
       })
-      m.addLayer({
-        id: 'lots-line',
-        type: 'line',
-        source: 'lots',
-        paint: {
-          'line-color': LINE_COLOR_MAP,
-          'line-width': LINE_WIDTH_MAP,
-        },
-      })
-      // Contorno do à venda por cima (vago+à venda mais grosso; verde se abaixo do mercado).
-      m.addLayer({
-        id: 'lots-venda-line',
-        type: 'line',
-        source: 'lots',
-        filter: A_VENDA,
-        paint: {
-          'line-color': ['case', ABAIXO_MERCADO, COR_LOTE.oportunidade, ['case', VAGO, COR_LOTE.vagoVenda, COR_LOTE.venda]],
-          'line-width': ['case', VAGO, 3, 2],
-        },
-      })
+      for (const f of FONTES) addLotLayers(m, f)
       readyRef.current = true
       const src = m.getSource('lots') as GeoJSONSource | undefined
       const data = dataRef.current
@@ -241,18 +241,20 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
       }
     })
 
-    m.on('click', 'lots-fill', (e) => {
-      const f = e.features?.[0]
-      if (!f) return
-      const id = Number(f.id ?? (f.properties as { id?: number } | null)?.id)
-      if (!Number.isNaN(id)) onSelectRef.current(id)
-    })
-    m.on('mouseenter', 'lots-fill', () => {
-      m.getCanvas().style.cursor = 'pointer'
-    })
-    m.on('mouseleave', 'lots-fill', () => {
-      m.getCanvas().style.cursor = ''
-    })
+    for (const { source } of FONTES) {
+      m.on('click', `${source}-fill`, (e) => {
+        const f = e.features?.[0]
+        if (!f) return
+        const id = Number(f.id ?? (f.properties as { id?: number } | null)?.id)
+        if (!Number.isNaN(id)) onSelectRef.current(id)
+      })
+      m.on('mouseenter', `${source}-fill`, () => {
+        m.getCanvas().style.cursor = 'pointer'
+      })
+      m.on('mouseleave', `${source}-fill`, () => {
+        m.getCanvas().style.cursor = ''
+      })
+    }
 
     mapRef.current = m
     return () => {
@@ -282,6 +284,13 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
     }
   }, [data])
 
+  // filtro mudou: tiles do recorte novo (a câmera fica com o efeito de `data`, acima)
+  useEffect(() => {
+    const m = mapRef.current
+    if (!m || !readyRef.current) return
+    ;(m.getSource(FONTE_TILES.source) as VectorTileSource | undefined)?.setTiles([tilesUrl])
+  }, [tilesUrl])
+
   // seleção mudou (clique no mapa/lista, ou lote aberto de outra aba)
   useEffect(() => {
     const m = mapRef.current
@@ -302,9 +311,11 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
     const m = mapRef.current
     if (!m || !readyRef.current) return
     m.setLayoutProperty('esri', 'visibility', satellite ? 'visible' : 'none')
-    m.setPaintProperty('lots-fill', 'fill-opacity', satellite ? FILL_SAT : FILL_MAP)
-    m.setPaintProperty('lots-line', 'line-color', satellite ? '#ffffff' : LINE_COLOR_MAP)
-    m.setPaintProperty('lots-line', 'line-width', satellite ? LINE_WIDTH_SAT : LINE_WIDTH_MAP)
+    for (const { source } of FONTES) {
+      m.setPaintProperty(`${source}-fill`, 'fill-opacity', satellite ? FILL_SAT : FILL_MAP)
+      m.setPaintProperty(`${source}-line`, 'line-color', satellite ? '#ffffff' : LINE_COLOR_MAP)
+      m.setPaintProperty(`${source}-line`, 'line-width', satellite ? LINE_WIDTH_SAT : LINE_WIDTH_MAP)
+    }
   }, [satellite])
 
   return (
@@ -348,6 +359,40 @@ export function MapView({ data, selectedId, selectedCenter, onSelect }: Props) {
       </div>
     </div>
   )
+}
+
+/** Camadas do lote numa fonte: `<source>-fill`, `<source>-line` e `<source>-venda-line`. */
+function addLotLayers(m: MLMap, f: FonteLote) {
+  const base = { source: f.source, ...(f.sourceLayer ? { 'source-layer': f.sourceLayer } : {}), ...f.zoom }
+  m.addLayer({
+    id: `${f.source}-fill`,
+    type: 'fill',
+    ...base,
+    paint: {
+      'fill-color': FILL_COLOR,
+      'fill-opacity': FILL_MAP,
+    },
+  })
+  m.addLayer({
+    id: `${f.source}-line`,
+    type: 'line',
+    ...base,
+    paint: {
+      'line-color': LINE_COLOR_MAP,
+      'line-width': LINE_WIDTH_MAP,
+    },
+  })
+  // Contorno do à venda por cima (vago+à venda mais grosso; verde se abaixo do mercado).
+  m.addLayer({
+    id: `${f.source}-venda-line`,
+    type: 'line',
+    ...base,
+    filter: A_VENDA,
+    paint: {
+      'line-color': ['case', ABAIXO_MERCADO, COR_LOTE.oportunidade, ['case', VAGO, COR_LOTE.vagoVenda, COR_LOTE.venda]],
+      'line-width': ['case', VAGO, 3, 2],
+    },
+  })
 }
 
 const prefersReducedMotion = () =>

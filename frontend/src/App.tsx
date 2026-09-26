@@ -6,7 +6,7 @@ import { LotFichaPanel } from './components/LotFichaPanel'
 import { LandbankBoard } from './components/LandbankBoard'
 import { OportunidadesView } from './components/OportunidadesView'
 import { useAsync } from './hooks/useApi'
-import { getLot, listBairros, listLots, type LotFilters } from './api/client'
+import { getLot, listBairros, listLots, lotTilesUrl, type LotFilters } from './api/client'
 
 type View = 'explorar' | 'oportunidades' | 'landbank'
 
@@ -65,6 +65,7 @@ export default function App() {
         <main className="main">
           <MapView
             data={lots.data}
+            tilesUrl={lotTilesUrl(filters)}
             selectedId={selectedId}
             selectedCenter={selectedCenter}
             onSelect={setSelectedId}

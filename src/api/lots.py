@@ -4,13 +4,14 @@ from __future__ import annotations
 import json
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from src.api.auth import get_current_plan, get_optional_plan
 from src.api.db import get_conn
 from src.api.pdf import build_ficha_pdf
+from src.db.database import INTERNAL_SRID
 from src.api.plans import limits_for
 from src.api.schemas import (
     VGV,
@@ -85,6 +86,52 @@ _ORDER = {
 }
 _SORT_PATTERN = "^(" + "|".join(_ORDER) + ")$"
 
+# FROM + anúncio vivo + filtros da UI. Fonte única da lista (/lots, GeoJSON) e dos tiles do
+# mapa (/tiles/lotes): os dois têm que mostrar exatamente o mesmo recorte.
+_LOTES_FILTRADOS = f"""
+    FROM geo.lotes l
+    LEFT JOIN geo.lote_zona lz ON lz.lote_id = l.id
+    LEFT JOIN LATERAL (
+        -- R$/m² do TERRENO (preço ÷ área do lote): comparável entre terreno e casa.
+        SELECT a.id AS anuncio_id, a.preco,
+               a.preco / nullif(l.area_geom_m2, 0) AS preco_m2,
+               a.tipo AS anuncio_tipo, a.oportunidade_tier, a.desconto_pct
+        FROM market.anuncio_lote al2
+        JOIN market.anuncios a ON a.id = al2.anuncio_id AND {_ANUNCIO_VIVO}
+        WHERE al2.lote_id = l.id AND coalesce(al2.score, 1) >= :score_min
+        ORDER BY al2.score DESC NULLS LAST, a.scraped_at DESC NULLS LAST
+        LIMIT 1
+    ) al ON :anuncios_ativos
+    WHERE (:bairro = '' OR l.bairro ILIKE :bairro)
+      AND (NOT :only_vacant OR l.tipo = 'TERRITORIAL')
+      AND (NOT :a_venda OR al.anuncio_id IS NOT NULL)
+      AND (:area_min IS NULL OR l.area_geom_m2 >= :area_min)
+      AND (:area_max IS NULL OR l.area_geom_m2 <= :area_max)
+"""
+
+# Tiles vetoriais (MVT) do mapa: sem teto de lotes — a cidade inteira (~187 mil) aparece.
+# Abaixo do z13 um tile ≈ a cidade (z12: 112 mil lotes, 1,3 MB gzip, ~2 s): lá o mapa usa o
+# GeoJSON da lista. Acima do z16 o MapLibre amplia o z16 (grade 4096 → ~15 cm: sobra p/ lote).
+TILE_MIN_ZOOM = 13
+TILE_MAX_ZOOM = 16
+TILE_CACHE_S = 600  # anúncios mudam a cada carga (dias); 10 min poupa o Neon no vai-e-vem do mapa
+
+
+def _filtro_params(
+    bairro: str, only_vacant: bool, a_venda: bool, area_min: float | None, area_max: float | None
+) -> dict[str, object]:
+    """Parâmetros de `_LOTES_FILTRADOS` (filtros da UI + frescor/score/liga-desliga do anúncio)."""
+    return {
+        "bairro": bairro,
+        "only_vacant": only_vacant,
+        "a_venda": a_venda,
+        "area_min": area_min,
+        "area_max": area_max,
+        "anuncios_ativos": ANUNCIOS_ATIVOS,
+        "max_dias": ANUNCIO_MAX_DIAS,
+        "score_min": CASAMENTO_SCORE_MIN,
+    }
+
 
 def _f(v: object) -> float | None:
     """Decimal/None -> float/None (Pydantic aceita, JSON serializa)."""
@@ -121,41 +168,13 @@ def list_lots(
                (al.anuncio_id IS NOT NULL) AS a_venda, al.preco, al.preco_m2,
                al.anuncio_tipo, al.oportunidade_tier, al.desconto_pct,
                ST_AsGeoJSON(ST_Transform(l.geom, 4326), 6) AS geojson
-        FROM geo.lotes l
-        LEFT JOIN geo.lote_zona lz ON lz.lote_id = l.id
-        LEFT JOIN LATERAL (
-            -- R$/m² do TERRENO (preço ÷ área do lote): comparável entre terreno e casa.
-            SELECT a.id AS anuncio_id, a.preco,
-                   a.preco / nullif(l.area_geom_m2, 0) AS preco_m2,
-                   a.tipo AS anuncio_tipo, a.oportunidade_tier, a.desconto_pct
-            FROM market.anuncio_lote al2
-            JOIN market.anuncios a ON a.id = al2.anuncio_id AND {_ANUNCIO_VIVO}
-            WHERE al2.lote_id = l.id AND coalesce(al2.score, 1) >= :score_min
-            ORDER BY al2.score DESC NULLS LAST, a.scraped_at DESC NULLS LAST
-            LIMIT 1
-        ) al ON :anuncios_ativos
-        WHERE (:bairro = '' OR l.bairro ILIKE :bairro)
-          AND (NOT :only_vacant OR l.tipo = 'TERRITORIAL')
-          AND (NOT :a_venda OR al.anuncio_id IS NOT NULL)
-          AND (:area_min IS NULL OR l.area_geom_m2 >= :area_min)
-          AND (:area_max IS NULL OR l.area_geom_m2 <= :area_max)
+        {_LOTES_FILTRADOS}
         ORDER BY {_ORDER[sort]}
         LIMIT :limit
     """
-    rows = conn.execute(
-        text(sql),
-        {
-            "bairro": bairro,
-            "only_vacant": only_vacant,
-            "a_venda": a_venda,
-            "area_min": area_min,
-            "area_max": area_max,
-            "limit": limit + 1,  # 1 a mais que o teto = sabe se cortou sem um COUNT(*) à parte
-            "anuncios_ativos": ANUNCIOS_ATIVOS,
-            "max_dias": ANUNCIO_MAX_DIAS,
-            "score_min": CASAMENTO_SCORE_MIN,
-        },
-    ).mappings().all()
+    params = _filtro_params(bairro, only_vacant, a_venda, area_min, area_max)
+    # 1 a mais que o teto = sabe se cortou sem um COUNT(*) à parte
+    rows = conn.execute(text(sql), params | {"limit": limit + 1}).mappings().all()
     truncado = len(rows) > limit
 
     # JSON montado à mão: a geometria já sai do PostGIS como texto GeoJSON e entra crua, sem
@@ -190,6 +209,42 @@ def list_lots(
         f'"features":[{",".join(features)}]}}'
     )
     return Response(content=body, media_type="application/json")
+
+
+@router.get("/tiles/lotes/{z}/{x}/{y}.pbf")
+def lot_tiles(
+    z: int = Path(ge=TILE_MIN_ZOOM, le=TILE_MAX_ZOOM),
+    x: int = Path(ge=0),
+    y: int = Path(ge=0),
+    bairro: str = Query(""),
+    only_vacant: bool = Query(True),
+    a_venda: bool = Query(False),
+    area_min: float | None = Query(None, ge=0),
+    area_max: float | None = Query(None, ge=0),
+    conn: Connection = Depends(get_conn),
+) -> Response:
+    """Tile MVT (camada `lotes`) com os mesmos filtros de /lots. Só o que o mapa pinta:
+    id (feature id, p/ clique e destaque), tipo, a_venda, oportunidade_tier."""
+    if x >= 2**z or y >= 2**z:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "tile fora da grade")
+    # && no SRID interno (índice GIST de geo.lotes); o recorte fino é do ST_AsMVTGeom.
+    sql = f"""
+        SELECT ST_AsMVT(t, 'lotes', 4096, 'geom', 'id') FROM (
+            SELECT l.id, l.tipo, (al.anuncio_id IS NOT NULL) AS a_venda, al.oportunidade_tier,
+                   ST_AsMVTGeom(ST_Transform(l.geom, 3857), ST_TileEnvelope(:z, :x, :y),
+                                4096, 64, true) AS geom
+            {_LOTES_FILTRADOS}
+              AND l.geom && ST_Transform(ST_TileEnvelope(:z, :x, :y), {INTERNAL_SRID})
+        ) t
+        WHERE t.geom IS NOT NULL
+    """
+    params = _filtro_params(bairro, only_vacant, a_venda, area_min, area_max)
+    mvt = conn.execute(text(sql), params | {"z": z, "x": x, "y": y}).scalar()
+    return Response(
+        content=bytes(mvt or b""),
+        media_type="application/vnd.mapbox-vector-tile",
+        headers={"Cache-Control": f"public, max-age={TILE_CACHE_S}"},
+    )
 
 
 def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
