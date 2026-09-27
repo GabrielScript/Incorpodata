@@ -38,10 +38,18 @@ export function LotFichaPanel({ lot, loading, error, onBack }: Props) {
           ← resultados
         </button>
         <div className="seg">
-          <button className={tab === 'resumo' ? 'on' : ''} onClick={() => setTab('resumo')}>
+          <button
+            className={tab === 'resumo' ? 'on' : ''}
+            aria-pressed={tab === 'resumo'}
+            onClick={() => setTab('resumo')}
+          >
             Resumo
           </button>
-          <button className={tab === 'completo' ? 'on' : ''} onClick={() => setTab('completo')}>
+          <button
+            className={tab === 'completo' ? 'on' : ''}
+            aria-pressed={tab === 'completo'}
+            onClick={() => setTab('completo')}
+          >
             Completo
           </button>
         </div>

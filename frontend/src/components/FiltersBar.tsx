@@ -11,9 +11,9 @@ export function FiltersBar({ bairros, value, onChange }: Props) {
   const hasCustomBairro = value.bairro !== '' && !bairros.includes(value.bairro)
 
   return (
-    <div className="filters">
+    <div className="filters" role="group" aria-label="Filtros">
       <label className="field">
-        <span>Bairro</span>
+        <span className="field-k">Bairro</span>
         <select value={value.bairro} onChange={(e) => set({ bairro: e.target.value })}>
           <option value="">Todos os bairros</option>
           {hasCustomBairro && <option value={value.bairro}>{value.bairro}</option>}
@@ -25,33 +25,37 @@ export function FiltersBar({ bairros, value, onChange }: Props) {
         </select>
       </label>
 
-      <label className="field">
-        <span>Área m²</span>
-        <input
-          className="num"
-          type="number"
-          inputMode="numeric"
-          min={0}
-          placeholder="mín"
-          aria-label="Área mínima do lote em m²"
-          value={value.areaMin}
-          onChange={(e) => set({ areaMin: e.target.value })}
-        />
-        <span className="dash">–</span>
-        <input
-          className="num"
-          type="number"
-          inputMode="numeric"
-          min={0}
-          placeholder="máx"
-          aria-label="Área máxima do lote em m²"
-          value={value.areaMax}
-          onChange={(e) => set({ areaMax: e.target.value })}
-        />
-      </label>
+      <fieldset className="field">
+        <legend className="field-k">Área m²</legend>
+        <div className="field-range">
+          <input
+            className="num"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            placeholder="mín"
+            aria-label="Área mínima do lote em m²"
+            value={value.areaMin}
+            onChange={(e) => set({ areaMin: e.target.value })}
+          />
+          <span className="dash" aria-hidden="true">
+            –
+          </span>
+          <input
+            className="num"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            placeholder="máx"
+            aria-label="Área máxima do lote em m²"
+            value={value.areaMax}
+            onChange={(e) => set({ areaMax: e.target.value })}
+          />
+        </div>
+      </fieldset>
 
       <label className="field">
-        <span>Ordenar por</span>
+        <span className="field-k">Ordenar por</span>
         <select value={value.sort} onChange={(e) => set({ sort: e.target.value as LotSort })}>
           <option value="none">ordem padrão</option>
           <optgroup label="Área do lote">
@@ -63,15 +67,6 @@ export function FiltersBar({ bairros, value, onChange }: Props) {
             <option value="proj_asc">menor → maior</option>
           </optgroup>
         </select>
-      </label>
-
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={value.onlyVacant}
-          onChange={(e) => set({ onlyVacant: e.target.checked })}
-        />
-        Só vagos
       </label>
     </div>
   )

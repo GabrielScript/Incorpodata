@@ -40,7 +40,7 @@ export function ResultsList({ data, loading, error, count, sort, selectedId, onS
       {data.truncado && (
         <div className="results-note">
           Recorte grande demais: a lista traz só os primeiros {nf0.format(count)} lotes (o mapa
-          mostra todos ao aproximar). Escolha um bairro ou marque “Só vagos” para listar todos.
+          mostra todos ao aproximar). Escolha um bairro ou uma faixa de área para listar todos.
         </div>
       )}
       <ul className="results-list">

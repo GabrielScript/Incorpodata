@@ -43,7 +43,6 @@ export type LotSort =
 
 export interface LotFilters {
   bairro: string // '' = todos os bairros
-  onlyVacant: boolean
   areaMin: string // texto do input; vazio = sem limite
   areaMax: string
   sort: LotSort
@@ -67,11 +66,12 @@ export const listBairros = () => json<string[]>(`${BASE}/bairros`)
 /** GeoJSON dos lotes + `truncado`: o recorte passou do teto da API e veio cortado. */
 export type LotCollection = FeatureCollection & { truncado?: boolean }
 
-/** Recorte dos filtros (sem a ordenação): o que a lista e os tiles do mapa têm em comum. */
+/** Recorte dos filtros (sem a ordenação): o que a lista e os tiles do mapa têm em comum.
+ *  Sempre só terrenos vagos — o app é de terrenos; o toggle "Só vagos" saiu em 09/2026. */
 function recorteParams(f: Omit<LotFilters, 'sort'>): URLSearchParams {
   const p = new URLSearchParams({
     bairro: f.bairro,
-    only_vacant: String(f.onlyVacant),
+    only_vacant: 'true',
   })
   if (f.areaMin.trim()) p.set('area_min', f.areaMin.trim())
   if (f.areaMax.trim()) p.set('area_max', f.areaMax.trim())

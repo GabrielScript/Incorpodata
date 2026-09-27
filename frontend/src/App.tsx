@@ -10,11 +10,16 @@ import { getLot, listBairros, listLots, lotTilesUrl, type LotFilters } from './a
 
 type View = 'explorar' | 'oportunidades' | 'landbank'
 
+const VIEWS: ReadonlyArray<readonly [View, string]> = [
+  ['explorar', 'Explorar'],
+  ['oportunidades', 'Oportunidades'],
+  ['landbank', 'Landbank'],
+]
+
 export default function App() {
   const [view, setView] = useState<View>('oportunidades')
   const [filters, setFilters] = useState<LotFilters>({
     bairro: '',
-    onlyVacant: true,
     areaMin: '',
     areaMax: '',
     sort: 'none',
@@ -24,7 +29,7 @@ export default function App() {
   const bairros = useAsync(() => listBairros(), [])
   const lots = useAsync(
     () => listLots(filters),
-    [filters.bairro, filters.onlyVacant, filters.areaMin, filters.areaMax, filters.sort],
+    [filters.bairro, filters.areaMin, filters.areaMax, filters.sort],
   )
   const ficha = useAsync(
     () => (selectedId == null ? Promise.resolve(null) : getLot(selectedId)),
@@ -38,28 +43,27 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
+      <aside className="sidebar">
         <h1 className="brand">
           Incorpo<span>Data</span>
+          <small>Viabilidade de terrenos</small>
         </h1>
-        <nav className="viewnav">
-          <button className={view === 'explorar' ? 'on' : ''} onClick={() => setView('explorar')}>
-            Explorar
-          </button>
-          <button
-            className={view === 'oportunidades' ? 'on' : ''}
-            onClick={() => setView('oportunidades')}
-          >
-            Oportunidades
-          </button>
-          <button className={view === 'landbank' ? 'on' : ''} onClick={() => setView('landbank')}>
-            Landbank
-          </button>
+        <nav className="viewnav" aria-label="Seções">
+          {VIEWS.map(([id, label]) => (
+            <button
+              key={id}
+              className={view === id ? 'on' : ''}
+              aria-current={view === id ? 'page' : undefined}
+              onClick={() => setView(id)}
+            >
+              {label}
+            </button>
+          ))}
         </nav>
         {view !== 'landbank' && (
           <FiltersBar bairros={bairros.data ?? []} value={filters} onChange={setFilters} />
         )}
-      </header>
+      </aside>
       {view === 'explorar' && (
         <main className="main">
           <MapView

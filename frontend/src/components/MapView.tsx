@@ -44,8 +44,8 @@ const STYLE: StyleSpecification = {
   ],
 }
 
-// Cor do lote: vago (o alvo) mais escuro que construído — sem "Só vagos", os tiles trazem a
-// cidade inteira e os dois tipos se misturam no mapa.
+// Cor do lote: vago (o alvo) mais escuro que construído. O recorte hoje é sempre só vagos, mas
+// a expressão segue valendo se a API devolver construídos.
 const VAGO: ExpressionSpecification = ['==', ['get', 'tipo'], 'TERRITORIAL']
 const COR_LOTE = {
   vago: '#7c878d',

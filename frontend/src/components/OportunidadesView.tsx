@@ -39,29 +39,34 @@ export function OportunidadesView({ bairro, onOpenLot }: Props) {
       )}
       <ol className="op-list">
         {ops.data?.map((o, i) => (
-          <li key={o.lot_id} className="op-card" onClick={() => onOpenLot(o.lot_id)}>
-            <div className="op-rank">{i + 1}</div>
-            <div className="op-main">
-              <div className="op-top">
-                <strong>{o.logradouro ?? `Lote ${o.lot_id}`}</strong>
-                <span className={`op-residual${o.residual_total > 0 ? '' : ' inviavel'}`}>
-                  {o.residual_total > 0 ? brl.format(o.residual_total) : 'inviável'}
-                </span>
-              </div>
-              <div className="op-meta">
-                {o.bairro ?? '—'} · {o.area_m2 != null ? `${nf0.format(o.area_m2)} m²` : '—'} · VGV{' '}
-                <strong>{brl.format(o.vgv_total)}</strong>
-                {o.terreno_pct_vgv != null && o.residual_total > 0 && (
-                  <> · terreno {pct(o.terreno_pct_vgv * 100)} do VGV</>
-                )}
-                {o.gap_pct != null && (
-                  <span className={`op-gap ${o.cabe_no_bolso ? 'ok' : 'caro'}`}>
-                    {' '}
-                    · {o.cabe_no_bolso ? '✓ cabe' : '✗ caro'} {pct(Math.abs(o.gap_pct) * 100)}
+          <li key={o.lot_id}>
+            {/* botão (não <li onClick>): abre por teclado; só conteúdo inline dentro dele */}
+            <button type="button" className="op-card" onClick={() => onOpenLot(o.lot_id)}>
+              <span className="op-rank" aria-hidden="true">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <span className="op-main">
+                <span className="op-top">
+                  <strong>{o.logradouro ?? `Lote ${o.lot_id}`}</strong>
+                  <span className={`op-residual${o.residual_total > 0 ? '' : ' inviavel'}`}>
+                    {o.residual_total > 0 ? brl.format(o.residual_total) : 'inviável'}
                   </span>
-                )}
-              </div>
-            </div>
+                </span>
+                <span className="op-meta">
+                  {o.bairro ?? '—'} · {o.area_m2 != null ? `${nf0.format(o.area_m2)} m²` : '—'} · VGV{' '}
+                  <strong>{brl.format(o.vgv_total)}</strong>
+                  {o.terreno_pct_vgv != null && o.residual_total > 0 && (
+                    <> · terreno {pct(o.terreno_pct_vgv * 100)} do VGV</>
+                  )}
+                  {o.gap_pct != null && (
+                    <span className={`op-gap ${o.cabe_no_bolso ? 'ok' : 'caro'}`}>
+                      {' '}
+                      · {o.cabe_no_bolso ? '✓ cabe' : '✗ caro'} {pct(Math.abs(o.gap_pct) * 100)}
+                    </span>
+                  )}
+                </span>
+              </span>
+            </button>
           </li>
         ))}
       </ol>
