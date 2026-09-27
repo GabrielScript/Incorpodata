@@ -44,46 +44,28 @@ const STYLE: StyleSpecification = {
   ],
 }
 
-// Estado do lote p/ a cor: vago + à venda (o alvo: destaque especial) > à venda construído
-// (casa: terreno "disfarçado") > vago > construído.
-const A_VENDA: ExpressionSpecification = ['boolean', ['get', 'a_venda'], false]
+// Cor do lote: vago (o alvo) mais escuro que construído — sem "Só vagos", os tiles trazem a
+// cidade inteira e os dois tipos se misturam no mapa.
 const VAGO: ExpressionSpecification = ['==', ['get', 'tipo'], 'TERRITORIAL']
-export const COR_LOTE = {
-  vagoVenda: '#d99a00',
-  venda: '#e0661f',
+const COR_LOTE = {
   vago: '#7c878d',
   construido: '#b7bec2',
-  oportunidade: '#11845b',
 } as const
-const FILL_COLOR: ExpressionSpecification = [
-  'case',
-  ['all', A_VENDA, VAGO], COR_LOTE.vagoVenda,
-  A_VENDA, COR_LOTE.venda,
-  VAGO, COR_LOTE.vago,
-  COR_LOTE.construido,
-]
-// Preço pedido abaixo do esperado (selo do anúncio) → contorno verde por cima.
-const ABAIXO_MERCADO: ExpressionSpecification = [
-  'in', ['coalesce', ['get', 'oportunidade_tier'], ''], ['literal', ['rara', 'boa', 'incerta']],
-]
+const FILL_COLOR: ExpressionSpecification = ['case', VAGO, COR_LOTE.vago, COR_LOTE.construido]
 
 // Paint do lote, reusado no addLayer e no toggle (fonte única — não duplicar expressão).
 // No mapa: cheio e colorido (legibilidade). No satélite: quase só contorno branco, pra a
-// imagem do terreno aparecer por baixo do polígono — menos o à venda, que segue pintado.
+// imagem do terreno aparecer por baixo do polígono.
 const FILL_MAP: ExpressionSpecification = [
   'case',
   ['boolean', ['feature-state', 'selected'], false],
   0.6,
-  A_VENDA,
-  0.55,
   0.22,
 ]
 const FILL_SAT: ExpressionSpecification = [
   'case',
   ['boolean', ['feature-state', 'selected'], false],
   0.18,
-  A_VENDA,
-  0.45,
   0,
 ]
 const LINE_COLOR_MAP: ExpressionSpecification = [
@@ -149,17 +131,11 @@ export function MapView({ data, tilesUrl, selectedId, selectedCenter, onSelect }
   const selIdRef = useRef(selectedId)
   const centerRef = useRef(selectedCenter)
   const [satellite, setSatellite] = useState(false)
-  // Legenda só com o que existe no recorte (antes era fixa em "Vago", mesmo com construídos).
+  // Legenda só com o que existe no recorte (fixa em "Vago" mentia com construídos na tela).
   const legenda = useMemo(() => {
-    const l = { vagoVenda: false, venda: false, oportunidade: false, vago: false, construido: false }
+    const l = { vago: false, construido: false }
     for (const f of data?.features ?? []) {
-      const p = f.properties as { a_venda?: boolean; tipo?: string; oportunidade_tier?: string | null } | null
-      const vago = p?.tipo === 'TERRITORIAL'
-      if (p?.a_venda) {
-        if (vago) l.vagoVenda = true
-        else l.venda = true
-        if (p.oportunidade_tier && ['rara', 'boa', 'incerta'].includes(p.oportunidade_tier)) l.oportunidade = true
-      } else if (vago) l.vago = true
+      if ((f.properties as { tipo?: string } | null)?.tipo === 'TERRITORIAL') l.vago = true
       else l.construido = true
     }
     return l
@@ -330,22 +306,6 @@ export function MapView({ data, tilesUrl, selectedId, selectedCenter, onSelect }
         </button>
       </div>
       <div className="legend" aria-label="Legenda do mapa">
-        {legenda.vagoVenda && (
-          <span>
-            <i className="sw" style={{ background: COR_LOTE.vagoVenda }} /> Vago à venda
-          </span>
-        )}
-        {legenda.venda && (
-          <span>
-            <i className="sw" style={{ background: COR_LOTE.venda }} /> À venda (casa)
-          </span>
-        )}
-        {legenda.oportunidade && (
-          <span>
-            <i className="sw contorno" style={{ borderColor: COR_LOTE.oportunidade }} /> Abaixo do
-            mercado
-          </span>
-        )}
         {legenda.vago && (
           <span>
             <i className="sw" style={{ background: COR_LOTE.vago }} /> Vago
@@ -361,7 +321,7 @@ export function MapView({ data, tilesUrl, selectedId, selectedCenter, onSelect }
   )
 }
 
-/** Camadas do lote numa fonte: `<source>-fill`, `<source>-line` e `<source>-venda-line`. */
+/** Camadas do lote numa fonte: `<source>-fill` e `<source>-line`. */
 function addLotLayers(m: MLMap, f: FonteLote) {
   const base = { source: f.source, ...(f.sourceLayer ? { 'source-layer': f.sourceLayer } : {}), ...f.zoom }
   m.addLayer({
@@ -380,17 +340,6 @@ function addLotLayers(m: MLMap, f: FonteLote) {
     paint: {
       'line-color': LINE_COLOR_MAP,
       'line-width': LINE_WIDTH_MAP,
-    },
-  })
-  // Contorno do à venda por cima (vago+à venda mais grosso; verde se abaixo do mercado).
-  m.addLayer({
-    id: `${f.source}-venda-line`,
-    type: 'line',
-    ...base,
-    filter: A_VENDA,
-    paint: {
-      'line-color': ['case', ABAIXO_MERCADO, COR_LOTE.oportunidade, ['case', VAGO, COR_LOTE.vagoVenda, COR_LOTE.venda]],
-      'line-width': ['case', VAGO, 3, 2],
     },
   })
 }

@@ -115,67 +115,6 @@ CREATE TABLE IF NOT EXISTS market.anuncios (
 CREATE INDEX IF NOT EXISTS idx_anuncios_geom  ON market.anuncios USING GIST (geom);
 CREATE INDEX IF NOT EXISTS idx_anuncios_ativo ON market.anuncios (ativo);
 
--- Camada "À venda" alimentada pelo inventário do BestPlaces (terrenos + casas; load_bestplaces).
--- LGPD: anunciante = nome + CRECI (dado profissional público); telefone continua FORA.
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS tipo              text;     -- Lote/Terreno | Casa | ...
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS business          text DEFAULT 'SALE';
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS quartos           int;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS banheiros         int;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS suites            int;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS vagas             int;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS iptu              numeric;  -- R$/ano como anunciado
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS condominio        numeric;  -- R$/mês
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS area_terreno_m2   numeric;  -- casa: terreno lido do texto
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS anunciante_nome   text;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS anunciante_creci  text;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS loc_aproximada    boolean;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS imagem_url        text;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS fontes            text[];   -- portais onde o imóvel aparece
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS scraped_at        timestamptz;
--- Oportunidade (preço pedido × esperado): LightGBM do BestPlaces (casa) ou hedônico (terreno).
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS preco_esperado    numeric;
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS preco_esperado_lo numeric;  -- faixa típica (q25)
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS preco_esperado_hi numeric;  -- faixa típica (q75)
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS desconto_pct      numeric;  -- (esperado − pedido)/esperado
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS confiabilidade    numeric;  -- 0–1
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS suspeito          boolean;  -- |z| > 3: bom/ruim demais
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS oportunidade_tier text;     -- rara | boa | mercado | acima | suspeito
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS oportunidade_modelo text;   -- lightgbm | hedonico
-ALTER TABLE market.anuncios ADD COLUMN IF NOT EXISTS logradouro_texto  text;     -- rua anunciada (confere o pino)
-
--- Séries de mercado (BCB SGS: juros do financiamento imobiliário; FipeZAP etc.). Mensal.
-CREATE TABLE IF NOT EXISTS market.indicadores (
-  serie        text NOT NULL,          -- ex.: financ_imob_pf_mercado_aa
-  data         date NOT NULL,          -- 1º dia do mês de referência
-  valor        numeric NOT NULL,
-  fonte        text,                   -- ex.: 'BCB SGS 20772'
-  carregado_em timestamptz DEFAULT now(),
-  PRIMARY KEY (serie, data)
-);
-
--- Bairro sem acento p/ comparar portal × cadastro ("Bancarios" = "Bancários"); usado no
--- casamento por área+raio (src/scrapers/match_anuncio_lote.py). Sem depender da extensão unaccent.
-CREATE OR REPLACE FUNCTION market.unaccent_bairro(s text) RETURNS text
-LANGUAGE sql IMMUTABLE AS $$
-  SELECT upper(translate(coalesce(s, ''),
-    'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
-    'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'))
-$$;
-
--- Chave p/ comparar a rua do anúncio ("Rua das Cortiças") com o logradouro do cadastro
--- ("CORTIÇAS, DAS"; "JOAO CIRILO DA SILVA, 1700 - RES. VILA REAL"; "X - PARK COWBOY"): corta
--- no 1º ", " e no " - " (número, condomínio, artigo invertido), tira tipo de via, preposição,
--- acento e pontuação. NULL se não sobra nada.
--- Usado p/ conferir o pino no casamento (src/scrapers/match_anuncio_lote.py).
-CREATE OR REPLACE FUNCTION market.chave_rua(s text) RETURNS text
-LANGUAGE sql IMMUTABLE AS $$
-  SELECT nullif(regexp_replace(regexp_replace(regexp_replace(
-    split_part(regexp_replace(market.unaccent_bairro(s), '\s+-\s.*$', ''), ',', 1),
-      '^\s*(RUA|R|AVENIDA|AV|AVE|TRAVESSA|TV|TRAV|ALAMEDA|AL|ESTRADA|RODOVIA|ROD|PRACA|VIA|BECO)\.?\s+', ''),
-    '\m(DA|DE|DO|DAS|DOS|E)\M', '', 'g'),
-    '[^A-Z0-9]', '', 'g'), '')
-$$;
-
 -- ───────────────────────── Casamento anúncio → lote (enriquecimento) ─────────────────────────
 CREATE TABLE IF NOT EXISTS market.anuncio_lote (
   anuncio_id bigint REFERENCES market.anuncios(id) ON DELETE CASCADE,
@@ -184,9 +123,6 @@ CREATE TABLE IF NOT EXISTS market.anuncio_lote (
   score      numeric,
   PRIMARY KEY (anuncio_id, lote_id)
 );
--- A PK começa por anuncio_id: sem este índice o "anúncio do lote" (LATERAL em /lots e nos
--- tiles) varria a tabela inteira por lote — tile z14 com todos os lotes: 0,8 s → ms.
-CREATE INDEX IF NOT EXISTS idx_anuncio_lote_lote ON market.anuncio_lote (lote_id);
 
 -- ───────────────────────── Comps de mercado (referência de preço, base do VGV) ─────────────────────────
 -- Distinto de market.anuncios: comps são a NUVEM de preços de venda (apto/casa/lote) que
@@ -220,11 +156,6 @@ CREATE INDEX IF NOT EXISTS idx_comps_geom   ON market.comps USING GIST (geom);
 -- ALTER IF NOT EXISTS: schema.sql é idempotente e também atualiza bancos já existentes.
 ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS endereco  text;  -- street do anúncio (entrada do geocoder)
 ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS geo_fonte text;  -- 'fonte' (scraper) | 'nominatim'
--- Atributos que o inventário multi-portal traz (BestPlaces) e o hedônico pode usar.
-ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS banheiros  int;
-ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS suites     int;
-ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS iptu       numeric;
-ALTER TABLE market.comps ADD COLUMN IF NOT EXISTS condominio numeric;
 
 -- Cache de consultas ao Nominatim (1 req/s): nunca repetir consulta, nem as que falharam.
 CREATE TABLE IF NOT EXISTS market.geocode_cache (

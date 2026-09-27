@@ -1,12 +1,9 @@
 import { memo, useEffect, useState } from 'react'
 import type { LotProperties } from '../api/types'
 import { SORT_LABELS, type LotCollection, type LotSort } from '../api/client'
-import { TIER_INFO } from './AnuncioCard'
 
 const nf0 = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
-const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 const fmtM2 = (v: number) => `${nf0.format(v)} m²`
-const CATEGORIA = { terreno: 'Terreno', casa: 'Casa' } as const
 
 // Linhas desenhadas por vez. A cidade inteira são ~24 mil lotes: tudo de uma vez travava a
 // aba ~10 s (e de novo a cada "← resultados"). O mapa segue mostrando o recorte inteiro.
@@ -74,7 +71,6 @@ const ResultRow = memo(function ResultRow({
   active: boolean
   onSelect: (id: number) => void
 }) {
-  const tier = p.oportunidade_tier ? TIER_INFO[p.oportunidade_tier] : null
   return (
     <li>
       <button className={`row${active ? ' active' : ''}`} onClick={() => onSelect(id)}>
@@ -85,19 +81,6 @@ const ResultRow = memo(function ResultRow({
         </span>
         {p.area_projecao_max_m2 != null && (
           <span className="row-proj">cabe ~{fmtM2(p.area_projecao_max_m2)} no térreo</span>
-        )}
-        {/* à venda: o preço e o selo são o que o usuário compara na lista, antes de abrir a ficha */}
-        {p.a_venda && p.preco != null && (
-          <span className="row-anuncio">
-            <span className="row-price">
-              {p.anuncio_categoria && <>{CATEGORIA[p.anuncio_categoria]} </>}
-              {brl.format(p.preco)}
-              {p.preco_m2 != null && (
-                <span className="row-price-m2"> · {brl.format(p.preco_m2)}/m² de terreno</span>
-              )}
-            </span>
-            {tier && <span className={`tier ${tier.classe}`}>{tier.rotulo}</span>}
-          </span>
         )}
       </button>
     </li>

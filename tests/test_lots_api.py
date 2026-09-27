@@ -30,9 +30,6 @@ def _lote(i: int, n: int) -> dict:
         "a_venda": False,
         "preco": None,
         "preco_m2": None,
-        "anuncio_tipo": None,
-        "oportunidade_tier": None,
-        "desconto_pct": None,
         "geojson": '{"type":"Polygon","coordinates":[[[-34.8,-7.1],[-34.8,-7.2],[-34.9,-7.2],[-34.8,-7.1]]]}',
     }
 
@@ -95,28 +92,12 @@ def test_feature_geojson_valida(api):
     assert f["properties"]["geometria_suspeita"] is False
 
 
-def test_lote_a_venda_traz_categoria_e_selo(api, monkeypatch):
-    import src.api.lots as lots
-
-    monkeypatch.setattr(lots, "ANUNCIOS_ATIVOS", True)
+def test_anuncios_desligados_por_padrao(api):
+    # só terreno do cadastro: o SQL nem casa anúncio (LATERAL ... ON false)
     client, conn = api(1)
-    orig = conn.execute
-
-    def com_anuncio(sql, params):
-        res = orig(sql, params)
-        res._rows[0] |= {"a_venda": True, "preco": 900000.0, "preco_m2": 2000.0,
-                         "anuncio_tipo": "Terreno / Lote", "oportunidade_tier": "incerta",
-                         "desconto_pct": 0.31}
-        return res
-
-    conn.execute = com_anuncio
-    p = client.get("/api/lots", params={"a_venda": "true"}).json()["features"][0]["properties"]
-    assert p["a_venda"] is True and p["anuncio_categoria"] == "terreno"
-    assert p["oportunidade_tier"] == "incerta" and p["desconto_pct"] == 0.31
-    # o SQL recebe os limites de frescor/score e o liga-desliga da camada
-    assert conn.params["anuncios_ativos"] is True
-    assert conn.params["max_dias"] == lots.ANUNCIO_MAX_DIAS
-    assert conn.params["a_venda"] is True
+    p = client.get("/api/lots").json()["features"][0]["properties"]
+    assert conn.params["anuncios_ativos"] is False
+    assert p["a_venda"] is False and p["preco"] is None
 
 
 class _FakeTileConn:

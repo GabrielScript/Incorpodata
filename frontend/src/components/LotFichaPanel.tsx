@@ -1,8 +1,6 @@
-import { createContext, useContext, useState } from 'react'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LotFicha } from '../api/types'
-import { AnuncioCard } from './AnuncioCard'
-import { CamposPicker, useCamposFicha, type CampoFicha, type CamposFicha } from './FichaCampos'
 import { addLandbank, lotPdfUrl } from '../api/client'
 import { GLOSSARY } from '../glossary'
 
@@ -31,15 +29,9 @@ interface Props {
   onBack: () => void
 }
 
-// Campos visíveis da ficha (seletor "Personalizar ficha"), acessíveis a qualquer Row.
-const CamposCtx = createContext<CamposFicha | null>(null)
-const useCampos = () => useContext(CamposCtx)
-
 export function LotFichaPanel({ lot, loading, error, onBack }: Props) {
   const [tab, setTab] = useState<'resumo' | 'completo'>('resumo')
-  const campos = useCamposFicha()
   return (
-    <CamposCtx.Provider value={campos}>
     <div className="ficha">
       <div className="ficha-top">
         <button className="back" onClick={onBack}>
@@ -56,10 +48,8 @@ export function LotFichaPanel({ lot, loading, error, onBack }: Props) {
       </div>
       {loading && <div className="state">Carregando ficha…</div>}
       {error && <div className="state error">Erro: {error.message}</div>}
-      <CamposPicker campos={campos} />
       {lot && (tab === 'resumo' ? <Resumo lot={lot} /> : <Completo lot={lot} />)}
     </div>
-    </CamposCtx.Provider>
   )
 }
 
@@ -72,8 +62,6 @@ function Resumo({ lot }: { lot: LotFicha }) {
   const residual = lot.residual
   const [save, setSave] = useState<SaveState>('idle')
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
-  const campos = useCampos()
-  const ver = (c: CampoFicha) => campos?.mostra(c) ?? true
 
   async function onSaveLandbank() {
     setSave('saving')
@@ -112,9 +100,7 @@ function Resumo({ lot }: { lot: LotFicha }) {
         </div>
       )}
 
-      {lot.listing && campos && <AnuncioCard l={lot.listing} campos={campos} />}
-
-      {vgv && ver('estudo.vgv') && (
+      {vgv && (
         <div className="vgv">
           <div className="vgv-h">
             <Term k="VGV" label="VGV potencial" />
@@ -151,7 +137,7 @@ function Resumo({ lot }: { lot: LotFicha }) {
         </div>
       )}
 
-      {residual && ver('estudo.residual') && (
+      {residual && (
         <div className="residual">
           <div className="residual-h">
             <Term k="Valor residual" label="Quanto pagar" />
@@ -245,41 +231,36 @@ function Resumo({ lot }: { lot: LotFicha }) {
 
 function Completo({ lot }: { lot: LotFicha }) {
   const v = lot.viability
-  const campos = useCampos()
-  const ver = (c: CampoFicha) => campos?.mostra(c) ?? true
   return (
     <div className="completo">
       <h2>{lot.logradouro ?? `Lote ${lot.id}`}</h2>
       <div className="sub">
-        {ver('terreno.inscricao') && <>{lot.inscricao ?? '—'} · </>}
-        {lot.bairro ?? '—'} · {lot.tipo ?? '—'}
+        {lot.inscricao ?? '—'} · {lot.bairro ?? '—'} · {lot.tipo ?? '—'}
       </div>
 
       <Section title="Terreno">
-        <Row c="terreno.area_cad" k="Área cadastral" val={lot.area_cad_m2 != null ? m2(lot.area_cad_m2) : '—'} />
-        <Row c="terreno.area_geom" k="Área (geometria)" val={m2(lot.area_geom_m2)} />
-        <Row c="terreno.quadra_lote" k="Quadra / Lote" val={`${lot.quadra ?? '—'} / ${lot.lote ?? '—'}`} />
+        <Row k="Área cadastral" val={lot.area_cad_m2 != null ? m2(lot.area_cad_m2) : '—'} />
+        <Row k="Área (geometria)" val={m2(lot.area_geom_m2)} />
+        <Row k="Quadra / Lote" val={`${lot.quadra ?? '—'} / ${lot.lote ?? '—'}`} />
       </Section>
 
       <Section title="Zoneamento (LUOS 166/2024)">
-        <Row c="zona.zona" term="Zona" k="Zona" val={v?.sigla ? `${v.sigla}${v.nome_zona ? ` · ${v.nome_zona}` : ''}` : '—'} />
-        <Row c="zona.altura" term="Altura" k="Altura" val={lot.restricao.altura_label} />
-        <Row c="zona.orla" term="Faixa orla" k="Faixa orla" val={lot.restricao.faixa_orla ?? 'não'} />
-        <Row c="zona.iphaep" term="IPHAEP" k="IPHAEP" val={lot.restricao.em_centro_historico ? 'sim' : 'não'} />
+        <Row term="Zona" k="Zona" val={v?.sigla ? `${v.sigla}${v.nome_zona ? ` · ${v.nome_zona}` : ''}` : '—'} />
+        <Row term="Altura" k="Altura" val={lot.restricao.altura_label} />
+        <Row term="Faixa orla" k="Faixa orla" val={lot.restricao.faixa_orla ?? 'não'} />
+        <Row term="IPHAEP" k="IPHAEP" val={lot.restricao.em_centro_historico ? 'sim' : 'não'} />
       </Section>
 
       <Section title="O que cabe">
-        <Row c="zona.projecao" term="Projeção térreo" k="Projeção térreo (TO)" val={`${m2(v?.area_projecao_max_m2)} (${pct(v?.to_max_pct)})`} />
-        <Row c="zona.permeavel" term="Permeável mín" k="Permeável mín (TAP)" val={`${m2(v?.area_permeavel_min_m2)} (${pct(v?.tap_min_pct)})`} />
-        <Row c="zona.recuos" term="Recuo" k="Recuo frontal" val={v?.recuo_frontal_m != null ? `${v.recuo_frontal_m} m` : '—'} />
-        <Row c="zona.recuos" term="Recuo" k="Recuo lateral" val={v?.recuo_lateral ?? '—'} />
-        <Row c="zona.recuos" term="Recuo" k="Recuo fundo" val={v?.recuo_fundo ?? '—'} />
-        <Row c="zona.usos" term="Usos" k="Usos" val={v?.usos_obs ?? '—'} />
+        <Row term="Projeção térreo" k="Projeção térreo (TO)" val={`${m2(v?.area_projecao_max_m2)} (${pct(v?.to_max_pct)})`} />
+        <Row term="Permeável mín" k="Permeável mín (TAP)" val={`${m2(v?.area_permeavel_min_m2)} (${pct(v?.tap_min_pct)})`} />
+        <Row term="Recuo" k="Recuo frontal" val={v?.recuo_frontal_m != null ? `${v.recuo_frontal_m} m` : '—'} />
+        <Row term="Recuo" k="Recuo lateral" val={v?.recuo_lateral ?? '—'} />
+        <Row term="Recuo" k="Recuo fundo" val={v?.recuo_fundo ?? '—'} />
+        <Row term="Usos" k="Usos" val={v?.usos_obs ?? '—'} />
       </Section>
 
-      {lot.listing && <SecaoAnuncio lot={lot} />}
-
-      {lot.vgv && ver('estudo.vgv') && (
+      {lot.vgv && (
         <Section title="VGV potencial (estudo de massa · preliminar)">
           <Row term="VGV" k="VGV por pavimento" val={brl.format(lot.vgv.vgv_por_pavimento)} />
           {lot.vgv.vgv_por_pavimento_min != null && lot.vgv.vgv_por_pavimento_max != null && (
@@ -302,9 +283,7 @@ function Completo({ lot }: { lot: LotFicha }) {
         </Section>
       )}
 
-      {lot.financiamento && ver('financ.simulacao') && <SecaoFinanciamento lot={lot} />}
-
-      {lot.residual && ver('estudo.residual') && (
+      {lot.residual && (
         <Section title="Valor residual — quanto pagar (involutivo · preliminar)">
           <Row
             term="Valor residual"
@@ -340,89 +319,18 @@ function Completo({ lot }: { lot: LotFicha }) {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="section" role="group" aria-label={title}>
+    <div className="section">
       <div className="section-h">{title}</div>
       {children}
     </div>
   )
 }
 
-function Row({ k, val, term, c }: { k: string; val: string; term?: string; c?: CampoFicha }) {
-  const campos = useCampos()
-  if (c && campos && !campos.mostra(c)) return null
+function Row({ k, val, term }: { k: string; val: string; term?: string }) {
   return (
     <div className="frow">
       <span className="fk">{term ? <Term k={term} label={k} /> : k}</span>
       <span className="fv">{val}</span>
     </div>
-  )
-}
-
-function SecaoAnuncio({ lot }: { lot: LotFicha }) {
-  const l = lot.listing
-  if (!l) return null
-  const brlOu = (v?: number | null) => (v == null ? '—' : brl.format(v))
-  return (
-    <Section title={`Anúncio à venda · ${l.tipo ?? ''}`}>
-      <Row c="anuncio.preco" k="Preço pedido" val={brlOu(l.preco)} />
-      <Row c="anuncio.preco_m2" k="R$/m² do terreno (área do lote)" val={brlOu(l.preco_m2_terreno)} />
-      <Row c="anuncio.oportunidade" k="Preço esperado (faixa típica)" val={
-        l.preco_esperado == null
-          ? '—'
-          : `${brl.format(l.preco_esperado)}${l.preco_esperado_lo != null && l.preco_esperado_hi != null ? ` (${brl.format(l.preco_esperado_lo)}–${brl.format(l.preco_esperado_hi)})` : ''}`
-      } />
-      <Row c="anuncio.oportunidade" k="Pedido × esperado" val={
-        l.desconto_pct == null ? '—' : `${pct(Math.abs(l.desconto_pct) * 100)} ${l.desconto_pct >= 0 ? 'abaixo' : 'acima'}`
-      } />
-      <Row c="anuncio.area" k="Área anunciada" val={m2(l.area_anunc_m2)} />
-      <Row c="anuncio.area" k="Área do terreno (anúncio)" val={m2(l.area_terreno_m2)} />
-      {/* terreno: a API zera os cômodos -> as linhas somem em vez de "— / —" */}
-      {(l.quartos != null || l.suites != null) && (
-        <Row c="anuncio.comodos" k="Quartos / suítes" val={`${l.quartos ?? '—'} / ${l.suites ?? '—'}`} />
-      )}
-      {(l.banheiros != null || l.vagas != null) && (
-        <Row c="anuncio.comodos" k="Banheiros / vagas" val={`${l.banheiros ?? '—'} / ${l.vagas ?? '—'}`} />
-      )}
-      <Row c="anuncio.custos" k="IPTU (anunciado)" val={brlOu(l.iptu)} />
-      <Row c="anuncio.custos" k="Condomínio (mês)" val={brlOu(l.condominio)} />
-      <Row c="anuncio.anunciante" k="Anunciante" val={l.anunciante_nome ?? '—'} />
-      <Row c="anuncio.anunciante" k="CRECI" val={l.anunciante_creci ?? '—'} />
-      <Row c="anuncio.portais" k="Portais" val={(l.fontes?.length ? l.fontes : [l.fonte]).join(', ')} />
-      <Row c="anuncio.portais" k="Coletado em" val={l.coletado_em ? new Date(l.coletado_em).toLocaleDateString('pt-BR') : '—'} />
-      <Row c="anuncio.casamento" k="Casamento com o lote" val={
-        `${l.casamento_metodo ?? '—'}${l.casamento_score != null ? ` · ${pct(l.casamento_score * 100)}` : ''}${l.loc_aproximada ? ' · pino aproximado' : ''}`
-      } />
-    </Section>
-  )
-}
-
-const NOME_CENARIO: Record<string, string> = {
-  mercado: 'Taxa de mercado (SFI)',
-  regulada: 'Taxa regulada (SFH/FGTS)',
-}
-
-function SecaoFinanciamento({ lot }: { lot: LotFicha }) {
-  const f = lot.financiamento
-  if (!f) return null
-  return (
-    <Section title="Financiamento do comprador (juros BCB)">
-      <Row
-        k="Unidade típica"
-        val={`${m2(f.unidade_area_m2)} · ${brl.format(f.unidade_valor)} · entrada ${pct(f.entrada_pct * 100)} · ${f.prazo_meses / 12} anos`}
-      />
-      {f.cenarios.map((c) => (
-        <div key={c.nome} className="financ-cenario">
-          <div className="financ-h">
-            {NOME_CENARIO[c.nome] ?? c.nome} · {c.taxa_aa_pct.toLocaleString('pt-BR')}% a.a.{' '}
-            <span className="k">({c.fonte ?? 'BCB'}, {new Date(c.data_ref).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })})</span>
-          </div>
-          <Row k="Parcela SAC (1ª → última)" val={`${brl.format(c.parcela_sac_inicial)} → ${brl.format(c.parcela_sac_final)}`} />
-          <Row k="Parcela Price (fixa)" val={brl.format(c.parcela_price)} />
-          <Row k="Renda familiar mínima" val={`${brl.format(c.renda_minima)}/mês`} />
-          <Row k="…se o juro subir 1 p.p." val={`${brl.format(c.renda_minima_mais_1pp)}/mês`} />
-        </div>
-      ))}
-      <p className="nota">{f.premissas}</p>
-    </Section>
   )
 }

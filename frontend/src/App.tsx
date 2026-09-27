@@ -15,7 +15,6 @@ export default function App() {
   const [filters, setFilters] = useState<LotFilters>({
     bairro: '',
     onlyVacant: true,
-    aVenda: false,
     areaMin: '',
     areaMax: '',
     sort: 'none',
@@ -25,7 +24,7 @@ export default function App() {
   const bairros = useAsync(() => listBairros(), [])
   const lots = useAsync(
     () => listLots(filters),
-    [filters.bairro, filters.onlyVacant, filters.aVenda, filters.areaMin, filters.areaMax, filters.sort],
+    [filters.bairro, filters.onlyVacant, filters.areaMin, filters.areaMax, filters.sort],
   )
   const ficha = useAsync(
     () => (selectedId == null ? Promise.resolve(null) : getLot(selectedId)),
