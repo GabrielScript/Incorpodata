@@ -306,7 +306,7 @@ button {
 
 /* ───────── painel lateral direito (lista / ficha) ───────── */
 .panel {
-  width: 392px;
+  width: 320px;
   border-left: 1px solid var(--border);
   background: var(--surface);
   overflow-y: auto;

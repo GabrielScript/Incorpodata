@@ -17,7 +17,7 @@ const VIEWS: ReadonlyArray<readonly [View, string]> = [
 ]
 
 export default function App() {
-  const [view, setView] = useState<View>('oportunidades')
+  const [view, setView] = useState<View>('explorar')
   const [filters, setFilters] = useState<LotFilters>({
     bairro: '',
     areaMin: '',
