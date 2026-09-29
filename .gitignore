@@ -42,3 +42,14 @@ Sirio_Liban*.txt
 agent-skills/
 geopandas/
 maps/
+
+# Skills/notas do Claude (ferramentas locais, não fazem parte do app)
+.claude/
+.agents/
+ml-engineer/
+mle-workflow/
+ml-pipeline-workflow/
+skills-lock.json
+CLAUDE.md
+sessions_state.md
+sessao_*.md
