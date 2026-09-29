@@ -1,7 +1,6 @@
 # IncorpoData — Inteligência de terrenos de João Pessoa
 
-Base de dados viva da **oferta de solo** de João Pessoa/PB, cruzando cadastro, zoneamento e
-anúncios de venda. Cliente-âncora: **construtoras/incorporadoras**.
+Base de dados viva da **oferta de solo** de João Pessoa/PB, cruzando cadastro, zoneamento. Cliente-âncora: **construtoras/incorporadoras/Imobiliárias/Corretores**.
 
 ## Estratégia (decidida)
 - **Cliente-âncora:** construtora.
@@ -30,13 +29,7 @@ A LUOS de JP **não** usa "área × coeficiente de aproveitamento". O que cabe n
 - **altura / nº de pavimentos = ESPACIAL**: faixa de **500m da orla** (Anexo III) + **IPHAEP** (centro histórico) — não é número por zona.
 - **usos** dependem da **hierarquia viária** (Anexo IV: local/coletora/arterial/expressa).
 
-Casar `anúncio → lote` por geolocalização = "este lote está à venda por R$X, TO 50%, e a altura permitida aqui é N pavimentos".
 
-## Postura legal (vira arquitetura, não opinião)
-- **ToS:** sites de anúncio proíbem scraping e têm anti-bot (DataDome/Cloudflare). Uso scraping
-  respeitoso + rate-limit; sites blindados via Firecrawl (serviço gerenciado). **Sem burla de anti-bot.**
-- **LGPD:** WhatsApp do vendedor = dado pessoal. **Não** estocar lista de telefones para revenda.
-  Guardar link do anúncio; **revelar contato sob demanda** (deeplink) ao usuário pagante. Minimização.
 
 ## Stack
 - **Dados/ingest:** Python 3.12 — `geopandas` (ingest geo), `Playwright` (scraping leve), `Firecrawl` (sites blindados).
@@ -72,16 +65,7 @@ Spec completa: `docs/superpowers/specs/2026-06-15-terraiq-app-design.md`. Respon
 - `app.users` (auth B2B) · `app.landbank_items` (lote salvo + estágio + notas, enum `app.estagio_lote`).
 - _Pendente da spec:_ `app.saved_searches`, `app.error_reports` (feature "⚑ reportar erro").
 
-## Ordem de construção
-1. [x] Espinha geo: Filipeia (lotes, quadras, zoneamento, bairros) → PostGIS.
-2. [x] Camada LUOS: parâmetros da LC 166/2024 por zona → área construível por lote.
-3. [x] API read-only (lotes/ficha) + frontend (mapa Bancários + ficha + filtros).
-4. [x] Schema `app` + auth (JWT) + landbank (backend).
-5. [~] Frontend: **tela Landbank ✓** (no navegador, sem login); falta "⚑ reportar erro" e saved searches.
-6. [ ] Scrapers: ChavesNaMão → normalizar → geocodificar → casar no lote.
-7. [x] Comps de venda (`market.comps` + view `preco_m2_bairro`) → **VGV potencial na ficha**.
-8. [x] **PDF da ficha** (com VGV). Jobs 2-3 (melhor uso, valor residual) ainda pendentes.
-9. [x] **Deploy: Cloud Run (API + frontend, container único) + Neon (Postgres/PostGIS free).**
+
 
 ## Produção
 - **No ar:** https://incorpodata-550574336825.southamerica-east1.run.app — projeto GCP `incorpodata-app`, região `southamerica-east1`, banco Neon (free).
@@ -149,4 +133,4 @@ nível de rua (Nominatim/OSM, 1 req/s, cache em `market.geocode_cache` — não 
 python -m src.scrapers.geocode_comps --dry-run    # relata pendências (sem rede)
 python -m src.scrapers.geocode_comps --limit 300  # geocodifica; re-rodar continua de onde parou
 ```
-Precedência de coordenada: `fonte` (exata do portal) > `nominatim` (rua) > `fonte_aprox` (pino).
+
