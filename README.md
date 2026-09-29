@@ -32,7 +32,7 @@ A LUOS de JP **não** usa "área × coeficiente de aproveitamento". O que cabe n
 
 
 ## Stack
-- **Dados/ingest:** Python 3.12 — `geopandas` (ingest geo), `Playwright` (scraping leve), `Firecrawl` (sites blindados).
+- **Dados/ingest:** Python 3.12 — `geopandas` (ingest geo), `Playwright` (scraping leve).
 - **DB:** PostgreSQL + **PostGIS** (Docker) — join espacial é o coração. SRID interno 31985; a API reprojeta p/ 4326 (mapa).
 - **API:** **FastAPI** (Python) — serve dados do lote + regra de viabilidade. JWT (`python-jose`), bcrypt (`passlib`).
 - **Frontend:** **Vite + React + TypeScript + MapLibre GL JS** (`frontend/`). App logado, sem SEO → Next descartado.
@@ -116,21 +116,6 @@ docker exec -i terraiq-postgis psql -U terraiq < sql/seed_demo_anuncios.sql
 # remover:  docker exec terraiq-postgis psql -U terraiq -c "DELETE FROM market.anuncios WHERE fonte='exemplo';"
 ```
 
-**Comps reais (R$/m² por bairro → VGV):** ingere `imoveis_jp.json` (raspado) em `market.comps`:
-```bash
-python -m src.scrapers.load_comps --dry-run   # confere R$/m² por bairro (não grava)
-python -m src.scrapers.load_comps             # grava ~28,4k comps; popula a view preco_m2_bairro
-```
-Na ingestão o bairro é **canonizado contra `geo.lotes`** (whitelist autoritativa, translitera acento):
-`neighborhood` que é rua/avenida/fora de JP é descartado (~1,2k de 29,6k) e a grafia bate com a do
-lote no join do VGV. Feito isso, a ficha (`GET /api/lots/{id}`) de um lote com zona traz o bloco `vgv`.
 
-**Geocodificação dos comps (mediana por RAIO do lote):** portais entregam ~7,4k comps com *pino
-aproximado* (`approx_location` — dezenas de anúncios no mesmo ponto), que ficam **fora** da mediana
-espacial (`geo_fonte='fonte_aprox'`); seguem valendo na mediana de bairro. O backfill promove ao
-nível de rua (Nominatim/OSM, 1 req/s, cache em `market.geocode_cache` — não repete consulta):
-```bash
-python -m src.scrapers.geocode_comps --dry-run    # relata pendências (sem rede)
-python -m src.scrapers.geocode_comps --limit 300  # geocodifica; re-rodar continua de onde parou
-```
+
 
