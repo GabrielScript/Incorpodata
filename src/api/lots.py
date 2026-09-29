@@ -24,10 +24,13 @@ from src.api.schemas import (
     Viability,
 )
 from src.api.viability import (
+    ALERTA_AGUA_PCT,
+    ALERTA_EDIFICADO_PCT,
     AREA_LOTE_SUSPEITA_M2,
     PrecoStats,
     altura_label,
     aviso_area_grande,
+    avisos_alerta,
     escolher_preco_ref,
     estimar_residual,
     estimar_vgv,
@@ -74,6 +77,7 @@ _SORT_PATTERN = "^(" + "|".join(_ORDER) + ")$"
 _LOTES_FILTRADOS = """
     FROM geo.lotes l
     LEFT JOIN geo.lote_zona lz ON lz.lote_id = l.id
+    LEFT JOIN geo.lote_alerta la ON la.lote_id = l.id
     LEFT JOIN LATERAL (
         SELECT a.id AS anuncio_id, a.preco, a.preco_m2
         FROM market.anuncio_lote al2
@@ -89,6 +93,21 @@ _LOTES_FILTRADOS = """
       AND (:area_max IS NULL OR l.area_geom_m2 <= :area_max)
 """
 
+# Lote vago com alerta (precisa de `la` = geo.lote_alerta e `l` no FROM): sinal de construção,
+# de água ou de rio (mesma regra de viability.tem_alerta) ou gleba (viability.geometria_suspeita).
+# No SQL p/ os tiles e o ranking usarem sem trazer as linhas pro Python.
+_ALERTA_SQL = """(
+    COALESCE(la.pct_edificado, 0) > :alerta_edif_pct
+    OR COALESCE(la.pct_agua, 0) > :alerta_agua_pct
+    OR COALESCE(la.corta_rio, false)
+    OR COALESCE(l.area_geom_m2, 0) > :area_suspeita
+)"""
+_ALERTA_PARAMS: dict[str, object] = {
+    "alerta_edif_pct": ALERTA_EDIFICADO_PCT,
+    "alerta_agua_pct": ALERTA_AGUA_PCT,
+    "area_suspeita": AREA_LOTE_SUSPEITA_M2,
+}
+
 # Tiles vetoriais (MVT) do mapa: sem teto de lotes — a cidade inteira (~187 mil) aparece.
 # Abaixo do z13 um tile ≈ a cidade (z12: 112 mil lotes, 1,3 MB gzip, ~2 s): lá o mapa usa o
 # GeoJSON da lista. Acima do z16 o MapLibre amplia o z16 (grade 4096 → ~15 cm: sobra p/ lote).
@@ -100,7 +119,7 @@ TILE_CACHE_S = 600  # lote só muda na carga do cadastro; 10 min poupa o Neon no
 def _filtro_params(
     bairro: str, only_vacant: bool, a_venda: bool, area_min: float | None, area_max: float | None
 ) -> dict[str, object]:
-    """Parâmetros de `_LOTES_FILTRADOS` (filtros da UI + liga-desliga do anúncio)."""
+    """Parâmetros de `_LOTES_FILTRADOS` (filtros da UI + liga-desliga do anúncio) e de `_ALERTA_SQL`."""
     return {
         "bairro": bairro,
         "only_vacant": only_vacant,
@@ -108,6 +127,7 @@ def _filtro_params(
         "area_min": area_min,
         "area_max": area_max,
         "anuncios_ativos": ANUNCIOS_ATIVOS,
+        **_ALERTA_PARAMS,
     }
 
 
@@ -144,6 +164,7 @@ def list_lots(
         SELECT l.id, l.logradouro, l.bairro, l.tipo, l.area_geom_m2, lz.sigla,
                lz.area_projecao_max_m2,
                (al.anuncio_id IS NOT NULL) AS a_venda, al.preco, al.preco_m2,
+               {_ALERTA_SQL} AS alerta,
                ST_AsGeoJSON(ST_Transform(l.geom, 4326), 6) AS geojson
         {_LOTES_FILTRADOS}
         ORDER BY {_ORDER[sort]}
@@ -169,6 +190,7 @@ def list_lots(
             "area_m2": _f(r["area_geom_m2"]),
             "area_projecao_max_m2": _f(r["area_projecao_max_m2"]),
             "geometria_suspeita": geometria_suspeita(_f(r["area_geom_m2"])),
+            "alerta": bool(r["alerta"]),
             "sigla": r["sigla"],
             # desligado, o LATERAL não casa nada: a_venda False e preço None por construção
             "a_venda": bool(r["a_venda"]),
@@ -199,13 +221,13 @@ def lot_tiles(
     conn: Connection = Depends(get_conn),
 ) -> Response:
     """Tile MVT (camada `lotes`) com os mesmos filtros de /lots. Só o que o mapa pinta:
-    id (feature id, p/ clique e destaque) e tipo (vago × construído)."""
+    id (feature id, p/ clique e destaque), tipo (vago × construído) e alerta."""
     if x >= 2**z or y >= 2**z:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "tile fora da grade")
     # && no SRID interno (índice GIST de geo.lotes); o recorte fino é do ST_AsMVTGeom.
     sql = f"""
         SELECT ST_AsMVT(t, 'lotes', 4096, 'geom', 'id') FROM (
-            SELECT l.id, l.tipo,
+            SELECT l.id, l.tipo, {_ALERTA_SQL} AS alerta,
                    ST_AsMVTGeom(ST_Transform(l.geom, 3857), ST_TileEnvelope(:z, :x, :y),
                                 4096, 64, true) AS geom
             {_LOTES_FILTRADOS}
@@ -232,13 +254,15 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
                lz.sigla, p.nome AS nome_zona, p.to_max_pct, p.tap_min_pct,
                p.recuo_frontal_m, p.recuo_lateral, p.recuo_fundo, p.usos_obs,
                lz.area_projecao_max_m2, lz.area_permeavel_min_m2,
-               lr.faixa_orla, lr.em_centro_historico, lr.em_barreira, lr.altura_livre
+               lr.faixa_orla, lr.em_centro_historico, lr.em_barreira, lr.altura_livre,
+               la.pct_edificado, la.n_edificacoes, la.pct_agua, la.corta_rio
         FROM geo.lotes l
         LEFT JOIN geo.lote_zona lz ON lz.lote_id = l.id
         LEFT JOIN zoning.parametros p
                ON regexp_replace(upper(p.sigla),  '[^A-Z0-9]', '', 'g')
                 = regexp_replace(upper(lz.sigla), '[^A-Z0-9]', '', 'g')
         LEFT JOIN geo.lote_restricao lr ON lr.lote_id = l.id
+        LEFT JOIN geo.lote_alerta la ON la.lote_id = l.id
         WHERE l.id = :id
     """
     row = conn.execute(text(sql), {"id": lot_id}).mappings().first()
@@ -458,6 +482,9 @@ def _load_ficha(lot_id: int, conn: Connection) -> LotFicha | None:
         area_geom_m2=_f(row["area_geom_m2"]),
         geometria_suspeita=suspeita,
         geometria_aviso=geometria_aviso,
+        alertas=avisos_alerta(
+            _f(row["pct_edificado"]), row["n_edificacoes"], _f(row["pct_agua"]), row["corta_rio"]
+        ),
         centroid=centroid,
         viability=viability,
         restricao=restricao,
@@ -509,6 +536,8 @@ def list_oportunidades(
     ordena: sem anúncio casado, 3 dos 4 eixos são quase só o preço/m² do bairro relido.
     Avalia (VGV+residual) até `cohort_max` lotes vagos do bairro e devolve os `limit`
     melhores. Custo O(cohort) em queries — caminho de escala: materializar geo.lote_score.
+    Lote com alerta (construção/água/rio/gleba — `_ALERTA_SQL`) não entra: o topo do ranking
+    é o que o corretor abre primeiro, e ali não pode ter casa nem lagoa.
     """
     if not limits_for(plano).vgv_detalhado:
         raise HTTPException(
@@ -517,19 +546,20 @@ def list_oportunidades(
         )
     cand = conn.execute(
         text(
-            """
+            f"""
             SELECT l.id
             FROM geo.lotes l
             JOIN geo.lote_zona lz ON lz.lote_id = l.id
+            LEFT JOIN geo.lote_alerta la ON la.lote_id = l.id
             WHERE (:bairro = '' OR l.bairro ILIKE :bairro)
               AND l.tipo = 'TERRITORIAL'
               AND lz.area_projecao_max_m2 IS NOT NULL
-              AND (l.area_geom_m2 IS NULL OR l.area_geom_m2 < :area_suspeita)
+              AND NOT {_ALERTA_SQL}
             ORDER BY lz.area_projecao_max_m2 DESC NULLS LAST
             LIMIT :cohort_max
             """
         ),
-        {"bairro": bairro, "area_suspeita": AREA_LOTE_SUSPEITA_M2, "cohort_max": cohort_max},
+        {"bairro": bairro, "cohort_max": cohort_max, **_ALERTA_PARAMS},
     ).all()
 
     ops: list[Oportunidade] = []

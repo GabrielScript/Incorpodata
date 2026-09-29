@@ -105,6 +105,8 @@ export interface LotFicha {
   area_geom_m2?: number | null
   geometria_suspeita?: boolean
   geometria_aviso?: string | null
+  /** Sinais de que o "vago" talvez não seja vago/edificável (construção, água, rio). */
+  alertas?: string[]
   centroid?: [number, number] | null
   viability?: Viability | null
   restricao: Restricao
@@ -139,6 +141,8 @@ export interface LotProperties {
   area_m2?: number | null
   area_projecao_max_m2?: number | null
   sigla?: string | null
+  /** Vago com sinal de construção, água, rio ou gleba — detalhe na ficha. */
+  alerta?: boolean
   a_venda: boolean
   preco?: number | null
   preco_m2?: number | null

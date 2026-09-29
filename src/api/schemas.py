@@ -105,6 +105,8 @@ class LotFicha(BaseModel):
     # Guarda de plausibilidade: área grande demais p/ lote urbano (gleba/ZEPA). VGV suprimido.
     geometria_suspeita: bool = False
     geometria_aviso: str | None = None
+    # Sinais de que o "vago" talvez não seja vago/edificável (construção, água, rio). Vazio = nada.
+    alertas: list[str] = []
     centroid: list[float] | None = None  # [lng, lat] WGS84, p/ centralizar o mapa
     viability: Viability | None = None
     restricao: Restricao

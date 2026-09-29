@@ -71,6 +71,52 @@ def aviso_area_grande(area_geom_m2: float | None, sigla: str | None) -> str | No
     )
 
 
+# Alertas de "vago que talvez não seja vago/edificável" (geo.lote_alerta, calculado por
+# src/ingest/alertas_lotes.py contra camadas do próprio Filipeia). Auditoria de 28/09/2026:
+# 2.279 dos 23.682 vagos têm >25% da área sob edificação mapeada (o IPTU diz TERRITORIAL);
+# 41 têm >25% dentro de rio/lagoa (loteamento no papel sobre água). Abaixo de 25% é, na maior
+# parte, desalinhamento de desenho com o vizinho — não alerta.
+ALERTA_EDIFICADO_PCT = 25.0
+ALERTA_AGUA_PCT = 25.0
+
+
+def tem_alerta(pct_edificado: float | None, pct_agua: float | None, corta_rio: bool | None) -> bool:
+    """True se o lote vago tem sinal de construção, de água ou de rio atravessando."""
+    return (
+        (pct_edificado or 0.0) > ALERTA_EDIFICADO_PCT
+        or (pct_agua or 0.0) > ALERTA_AGUA_PCT
+        or bool(corta_rio)
+    )
+
+
+def avisos_alerta(
+    pct_edificado: float | None,
+    n_edificacoes: int | None,
+    pct_agua: float | None,
+    corta_rio: bool | None,
+) -> list[str]:
+    """Avisos da ficha, em linguagem de incorporador. Vazio se nada dispara."""
+    avisos: list[str] = []
+    if (pct_edificado or 0.0) > ALERTA_EDIFICADO_PCT:
+        n = n_edificacoes or 0
+        qtd = f" ({n} edificaç{'ão' if n == 1 else 'ões'})" if n else ""
+        avisos.append(
+            f"Possível construção: {pct_edificado:.0f}% da área aparece coberta por edificações "
+            f"no mapeamento da prefeitura{qtd}, embora o cadastro diga vago. "
+            "Confira no satélite ou no Street View antes de seguir."
+        )
+    if (pct_agua or 0.0) > ALERTA_AGUA_PCT:
+        avisos.append(
+            f"{pct_agua:.0f}% do lote fica dentro de rio, lagoa ou área alagada mapeada pela "
+            "prefeitura — essa parte não é edificável (APP)."
+        )
+    if corta_rio:
+        avisos.append(
+            "Um curso d'água atravessa o lote: a faixa de APP ao longo dele reduz a área útil."
+        )
+    return avisos
+
+
 def altura_label(
     faixa_orla: str | None,
     em_centro_historico: bool,

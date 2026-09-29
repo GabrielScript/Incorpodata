@@ -108,6 +108,12 @@ function Resumo({ lot }: { lot: LotFicha }) {
         </div>
       )}
 
+      {lot.alertas?.map((aviso) => (
+        <div key={aviso} className="aviso-alerta" role="note">
+          ⚠ {aviso}
+        </div>
+      ))}
+
       {vgv && (
         <div className="vgv">
           <div className="vgv-h">

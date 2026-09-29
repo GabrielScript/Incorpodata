@@ -106,6 +106,25 @@ uvicorn src.api.main:app --reload          # http://localhost:8000/docs
 cd frontend && npm install && npm run dev  # http://localhost:5173
 ```
 
+**Atualizar o cadastro de lotes (Filipeia)** sem trocar ids (links e landbank seguem valendo):
+baixe o `Lotes.zip` novo no portal (manual: o portal bloqueia robôs) e rode
+```bash
+python -m src.ingest.sync_lotes --zip data/raw/Lotes.zip            # simula: diff + relatório em data/sync/
+python -m src.ingest.sync_lotes --zip data/raw/Lotes.zip --aplicar  # grava numa transação; zona/altura só dos lotes tocados
+```
+Travas barram base que encolhe (±5%), perde >2% dos lotes ou tem fração de vagos implausível
+(`--forcar` ignora). `--wfs` lê o GeoServer público, mas em 09/2026 ele era um recorte **mais
+velho** que o portal (faltavam ~9 mil lotes reais) e a trava bloqueia. Histórico em `geo.cadastro_sync`.
+
+Depois de atualizar o cadastro, recalcule os **alertas dos vagos** (construção, água ou rio no
+lote, medidos contra EDIFICACOES / MassasDagua / Rios do Filipeia). Lote com alerta sai âmbar
+no mapa, com o motivo na ficha, e não entra no ranking de Oportunidades:
+```bash
+python -m src.ingest.alertas_lotes --simular   # distribuição, sem gravar
+python -m src.ingest.alertas_lotes             # refaz geo.lote_alerta (~1 min)
+```
+A API faz join em `geo.lote_alerta`: a tabela precisa existir antes do deploy do código.
+
 **Demo — camada "à venda":** popula uma amostra de anúncios de *exemplo* (não são comps
 reais) casados a lotes de Bancários, para o app mostrar preço + "cabe Y" no térreo:
 ```bash

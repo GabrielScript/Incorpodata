@@ -78,6 +78,11 @@ const ResultRow = memo(function ResultRow({
         <span className="row-sub">
           {p.area_m2 != null && <>{fmtM2(p.area_m2)} · </>}
           {p.sigla ?? 's/ zona'}
+          {p.alerta && (
+            <span className="row-alerta" title="Possível construção, água, rio ou gleba — veja a ficha">
+              ⚠ alerta
+            </span>
+          )}
         </span>
         {p.area_projecao_max_m2 != null && (
           <span className="row-proj">cabe ~{fmtM2(p.area_projecao_max_m2)} no térreo</span>

@@ -109,6 +109,13 @@ def build_ficha_pdf(ficha: LotFicha) -> bytes:
         ))
         flow.append(Spacer(1, 8))
 
+    # ───── Construção / água / rio no lote "vago" ─────
+    if ficha.alertas:
+        flow.append(Paragraph("⚠ Conferir antes de seguir", s["section"]))
+        for aviso in ficha.alertas:
+            flow.append(Paragraph(aviso, s["vgvk"]))
+        flow.append(Spacer(1, 8))
+
     # ───── VGV em destaque ─────
     if ficha.vgv is not None:
         v = ficha.vgv

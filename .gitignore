@@ -1,6 +1,7 @@
 # Dados brutos e processados (não versionar — podem ser grandes / conter dado pessoal)
 data/raw/
 data/processed/
+data/sync/
 *.shp
 *.shx
 *.dbf

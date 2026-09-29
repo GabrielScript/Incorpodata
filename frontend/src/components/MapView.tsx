@@ -45,47 +45,41 @@ const STYLE: StyleSpecification = {
 }
 
 // Cor do lote: vago (o alvo) mais escuro que construído. O recorte hoje é sempre só vagos, mas
-// a expressão segue valendo se a API devolver construídos.
+// a expressão segue valendo se a API devolver construídos. Vago com alerta (construção, água,
+// rio ou gleba — src/api/lots.py `_ALERTA_SQL`) em âmbar: o motivo está na ficha.
 const VAGO: ExpressionSpecification = ['==', ['get', 'tipo'], 'TERRITORIAL']
+const ALERTA: ExpressionSpecification = ['boolean', ['get', 'alerta'], false]
+const SELECIONADO: ExpressionSpecification = ['boolean', ['feature-state', 'selected'], false]
 const COR_LOTE = {
   vago: '#7c878d',
   construido: '#b7bec2',
+  alerta: '#c77d12',
 } as const
-const FILL_COLOR: ExpressionSpecification = ['case', VAGO, COR_LOTE.vago, COR_LOTE.construido]
+const FILL_COLOR: ExpressionSpecification = [
+  'case',
+  ALERTA,
+  COR_LOTE.alerta,
+  VAGO,
+  COR_LOTE.vago,
+  COR_LOTE.construido,
+]
 
 // Paint do lote, reusado no addLayer e no toggle (fonte única — não duplicar expressão).
 // No mapa: cheio e colorido (legibilidade). No satélite: quase só contorno branco, pra a
-// imagem do terreno aparecer por baixo do polígono.
-const FILL_MAP: ExpressionSpecification = [
-  'case',
-  ['boolean', ['feature-state', 'selected'], false],
-  0.6,
-  0.22,
-]
-const FILL_SAT: ExpressionSpecification = [
-  'case',
-  ['boolean', ['feature-state', 'selected'], false],
-  0.18,
-  0,
-]
+// imagem do terreno aparecer por baixo do polígono — o contorno do lote com alerta segue âmbar.
+const FILL_MAP: ExpressionSpecification = ['case', SELECIONADO, 0.6, 0.22]
+const FILL_SAT: ExpressionSpecification = ['case', SELECIONADO, 0.18, 0]
 const LINE_COLOR_MAP: ExpressionSpecification = [
   'case',
-  ['boolean', ['feature-state', 'selected'], false],
+  SELECIONADO,
   '#0b3d39',
+  ALERTA,
+  COR_LOTE.alerta,
   '#516068',
 ]
-const LINE_WIDTH_MAP: ExpressionSpecification = [
-  'case',
-  ['boolean', ['feature-state', 'selected'], false],
-  2.5,
-  0.5,
-]
-const LINE_WIDTH_SAT: ExpressionSpecification = [
-  'case',
-  ['boolean', ['feature-state', 'selected'], false],
-  3,
-  1.2,
-]
+const LINE_COLOR_SAT: ExpressionSpecification = ['case', ALERTA, '#f5b041', '#ffffff']
+const LINE_WIDTH_MAP: ExpressionSpecification = ['case', SELECIONADO, 2.5, ALERTA, 1, 0.5]
+const LINE_WIDTH_SAT: ExpressionSpecification = ['case', SELECIONADO, 3, 1.2]
 
 // Duas fontes de polígono de lote, com as mesmas camadas: abaixo do z13, o GeoJSON da lista
 // (como antes); do z13 pra cima, os tiles vetoriais da API — a cidade inteira, sem o teto de
@@ -133,9 +127,11 @@ export function MapView({ data, tilesUrl, selectedId, selectedCenter, onSelect }
   const [satellite, setSatellite] = useState(false)
   // Legenda só com o que existe no recorte (fixa em "Vago" mentia com construídos na tela).
   const legenda = useMemo(() => {
-    const l = { vago: false, construido: false }
+    const l = { vago: false, construido: false, alerta: false }
     for (const f of data?.features ?? []) {
-      if ((f.properties as { tipo?: string } | null)?.tipo === 'TERRITORIAL') l.vago = true
+      const p = f.properties as { tipo?: string; alerta?: boolean } | null
+      if (p?.alerta) l.alerta = true
+      else if (p?.tipo === 'TERRITORIAL') l.vago = true
       else l.construido = true
     }
     return l
@@ -289,7 +285,7 @@ export function MapView({ data, tilesUrl, selectedId, selectedCenter, onSelect }
     m.setLayoutProperty('esri', 'visibility', satellite ? 'visible' : 'none')
     for (const { source } of FONTES) {
       m.setPaintProperty(`${source}-fill`, 'fill-opacity', satellite ? FILL_SAT : FILL_MAP)
-      m.setPaintProperty(`${source}-line`, 'line-color', satellite ? '#ffffff' : LINE_COLOR_MAP)
+      m.setPaintProperty(`${source}-line`, 'line-color', satellite ? LINE_COLOR_SAT : LINE_COLOR_MAP)
       m.setPaintProperty(`${source}-line`, 'line-width', satellite ? LINE_WIDTH_SAT : LINE_WIDTH_MAP)
     }
   }, [satellite])
@@ -314,6 +310,11 @@ export function MapView({ data, tilesUrl, selectedId, selectedCenter, onSelect }
         {legenda.construido && (
           <span>
             <i className="sw" style={{ background: COR_LOTE.construido }} /> Construído
+          </span>
+        )}
+        {legenda.alerta && (
+          <span title="Possível construção, água, rio ou gleba — o motivo aparece na ficha do lote">
+            <i className="sw" style={{ background: COR_LOTE.alerta }} /> Vago com alerta
           </span>
         )}
       </div>

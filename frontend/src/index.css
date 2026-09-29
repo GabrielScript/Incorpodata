@@ -21,6 +21,9 @@
   --gold-light: #d9bd85; /* texto/foco dourado na sidebar escura */
   --danger: #a61b1b;
   --danger-soft: #fbeeee;
+  --warn: #7a4d05; /* 6.6:1 em --warn-soft — texto dos alertas de lote */
+  --warn-soft: #fdf3e1;
+  --warn-line: #ecc98b;
 
   --side-bg: #122029;
   --side-bg-2: #1a2c37;
@@ -410,6 +413,15 @@ button {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+.row-alerta {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
 
 /* ───────── ficha do lote ───────── */
 .ficha-top {
@@ -638,6 +650,16 @@ button {
   border-radius: var(--radius);
   background: var(--danger-soft);
   color: var(--danger);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.aviso-alerta {
+  border: 1px solid var(--warn-line);
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
   padding: 10px 12px;
   margin-bottom: 14px;
   font-size: 13px;

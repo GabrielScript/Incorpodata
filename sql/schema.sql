@@ -40,6 +40,30 @@ CREATE INDEX IF NOT EXISTS idx_lotes_inscricao ON geo.lotes (inscricao);
 CREATE INDEX IF NOT EXISTS idx_lotes_tipo      ON geo.lotes (tipo);
 CREATE INDEX IF NOT EXISTS idx_lotes_bairro    ON geo.lotes (bairro);
 
+-- Sinais de que o lote vago talvez não seja vago/edificável, medidos contra camadas do Filipeia
+-- (src/ingest/alertas_lotes.py; limiares em src/api/viability.py). Só lotes TERRITORIAL.
+CREATE TABLE IF NOT EXISTS geo.lote_alerta (
+  lote_id        bigint PRIMARY KEY REFERENCES geo.lotes(id) ON DELETE CASCADE,
+  pct_edificado  numeric NOT NULL,        -- % da área sob edificação (EDIFICACOES)
+  n_edificacoes  integer NOT NULL,        -- edificações com ponto interno no lote
+  pct_agua       numeric NOT NULL,        -- % dentro de rio/lagoa/área alagada (MassasDagua)
+  corta_rio      boolean NOT NULL,        -- eixo de rio (Rios) atravessa o lote
+  calculado_em   timestamptz NOT NULL DEFAULT now()
+);
+
+-- Histórico das atualizações do cadastro (src/ingest/sync_lotes.py --aplicar).
+CREATE TABLE IF NOT EXISTS geo.cadastro_sync (
+  id           bigserial PRIMARY KEY,
+  executado_em timestamptz NOT NULL DEFAULT now(),
+  fonte        text    NOT NULL,          -- zip:<arquivo> | wfs
+  lotes        integer NOT NULL,
+  novos        integer NOT NULL,
+  removidos    integer NOT NULL,
+  alterados    integer NOT NULL,
+  duplicadas   integer NOT NULL,
+  forcado      boolean NOT NULL DEFAULT false
+);
+
 -- ───────────────────────── Parâmetros urbanísticos (LUOS LC 166/2024) ─────────────────────────
 -- Preencher de config/luos_parametros.csv (extraído dos anexos da LC 166/2024).
 -- Modelo de JP: controle por TO/TAP/recuos (não por coef. de aproveitamento).

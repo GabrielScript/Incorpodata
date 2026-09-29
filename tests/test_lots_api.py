@@ -30,6 +30,7 @@ def _lote(i: int, n: int) -> dict:
         "a_venda": False,
         "preco": None,
         "preco_m2": None,
+        "alerta": i % 10 == 0,
         "geojson": '{"type":"Polygon","coordinates":[[[-34.8,-7.1],[-34.8,-7.2],[-34.9,-7.2],[-34.8,-7.1]]]}',
     }
 
@@ -92,6 +93,16 @@ def test_feature_geojson_valida(api):
     assert f["properties"]["geometria_suspeita"] is False
 
 
+def test_lista_marca_lote_com_alerta_com_os_limiares_da_viabilidade(api):
+    from src.api.viability import ALERTA_AGUA_PCT, ALERTA_EDIFICADO_PCT
+
+    client, conn = api(11)
+    feats = client.get("/api/lots").json()["features"]
+    assert [f["properties"]["alerta"] for f in feats] == [i % 10 == 0 for i in range(11)]
+    assert conn.params["alerta_edif_pct"] == ALERTA_EDIFICADO_PCT
+    assert conn.params["alerta_agua_pct"] == ALERTA_AGUA_PCT
+
+
 def test_anuncios_desligados_por_padrao(api):
     # só terreno do cadastro: o SQL nem casa anúncio (LATERAL ... ON false)
     client, conn = api(1)
@@ -141,6 +152,17 @@ def test_tile_mvt_com_os_mesmos_filtros_da_lista(tiles):
     assert conn.params["a_venda"] is True and conn.params["area_min"] == 300
     assert "limit" not in conn.params  # tile não tem teto: a cidade inteira aparece
     assert lots._LOTES_FILTRADOS in conn.sql  # mesmo recorte da lista, por construção
+    assert lots._ALERTA_SQL in conn.sql  # mapa pinta o alerta com a mesma regra da lista
+
+
+def test_ranking_exclui_lote_com_alerta_pela_mesma_regra():
+    """O topo das Oportunidades é o que o corretor abre primeiro: sem casa nem lagoa ali."""
+    import inspect
+
+    import src.api.lots as lots
+
+    fonte = inspect.getsource(lots.list_oportunidades)
+    assert "NOT {_ALERTA_SQL}" in fonte and "**_ALERTA_PARAMS" in fonte
 
 
 def test_tile_vazio_e_fora_da_faixa(tiles):
